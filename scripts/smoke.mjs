@@ -186,6 +186,12 @@ console.log('\n1c. --check-ip 诊断免认证规则')
 
   const bad = await run(['--pass', PASSWORD, '--check-ip', 'not-an-ip'])
   check('非法 --check-ip 报错', bad.code === 2 && bad.stderr.includes('不是合法 IP'))
+
+  // 不带 --foreground 也必须能诊断：诊断分支要在“默认后台启动”之前处理
+  const noFg = await runCmd(['--check-ip', '8.8.8.8', '--pass', PASSWORD, '--users-file', USERS_FILE, '--port', String(await freePort())])
+  check('--check-ip 不会被后台启动抢走', noFg.code === 0, `exit=${noFg.code}`)
+  check('--check-ip 直接打印结论', /需要登录/.test(noFg.stdout), JSON.stringify(noFg.stdout.slice(0, 60)))
+  check('--check-ip 不写状态文件（没启动服务）', !/已在后台启动/.test(noFg.stdout))
 }
 
 // --- 1b. 不配置密码（匿名模式） -----------------------------------------

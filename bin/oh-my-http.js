@@ -396,6 +396,18 @@ async function main() {
     console.log(`${NAME} ${VERSION}`)
     return
   }
+  // --check-ip 是只读诊断：必须在“后台启动”之前处理掉，否则会被当成要后台运行
+  if (cfg.checkIp) {
+    const store = createAccountStore({ file: cfg.usersFile, bootstrap: null })
+    if (store.loadError) {
+      console.error(`${NAME}: ${store.loadError.message}`)
+      process.exitCode = 2
+      return
+    }
+    printAccessCheck(withAuthState(cfg, store))
+    return
+  }
+
   if (cfg.daemon) {
     await startDaemon(argv, cfg)
     return
@@ -423,11 +435,6 @@ async function main() {
     return
   }
   cfg = withAuthState(cfg, store)
-
-  if (cfg.checkIp) {
-    printAccessCheck(cfg)
-    return
-  }
 
   const options = cfg.quiet ? {} : { logger: (entry) => console.log(formatLog(entry)) }
   const server = createServer(cfg, { ...options, store })
