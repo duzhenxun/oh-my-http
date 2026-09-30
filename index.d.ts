@@ -99,6 +99,10 @@ export interface ServerConfig {
   ipMaxAttempts: number
   /** 锁定时长（分钟，默认 60） */
   lockoutMinutes: number
+  /** 查新版本用的 registry，默认 https://registry.npmjs.org（可用 OHMY_REGISTRY 换成镜像） */
+  registry: string
+  /** 关掉新版本检查 */
+  noUpdateCheck: boolean
   /** 命令行是否显式指定了上面这些（显式时优先于后台设置） */
   accountMaxAttemptsExplicit: boolean
   ipMaxAttemptsExplicit: boolean
@@ -442,5 +446,39 @@ export function serveStatic(
   cfg: ServerConfig,
   urlPath: string,
 ): Promise<void>
+
+// ---------------------------------------------------------------------------
+// 新版本检查
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_REGISTRY: string
+export const CHECK_INTERVAL_MS: number
+/** 解析 "1.2.3" / "v1.2.3" / "1.2.3-beta.1"；非法返回 null。 */
+export function parseVersion(value: unknown): { major: number; minor: number; patch: number; pre: string | null } | null
+/** a > b 返回 1，a < b 返回 -1，无法比较返回 0。 */
+export function compareVersions(a: unknown, b: unknown): number
+export function updateCacheFile(stateDir: string): string
+export function readUpdateCache(file: string): { checkedAt?: string; latest?: string | null } | null
+export function writeUpdateCache(file: string, data: object): boolean
+/** 查 npm 上的最新版本；离线 / 超时 / 404 都静默返回 null。 */
+export function fetchLatestVersion(options?: {
+  name: string
+  registry?: string
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+}): Promise<string | null>
+/** 带缓存的检查（默认 24 小时内只联网一次）。 */
+export function checkForUpdate(options?: {
+  name: string
+  current: string
+  cacheFile?: string
+  registry?: string
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+  now?: number
+  force?: boolean
+}): Promise<{ latest: string | null; newer: boolean; checkedAt: string | null; fromCache: boolean }>
+/** 生成给用户看的升级提示。 */
+export function upgradeHint(options: { name: string; current: string; latest: string; installCmd?: string }): string[]
 
 export default createServer

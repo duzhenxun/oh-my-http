@@ -26,6 +26,7 @@ import {
   writeState,
 } from '../lib/runtime.js'
 import { createServer, explainAccess, lanAddresses, listen, withAuthState } from '../lib/server.js'
+import { checkForUpdate, compareVersions, readUpdateCache, updateCacheFile, upgradeHint } from '../lib/update.js'
 import { BANNER, NAME, VERSION } from '../lib/version.js'
 
 const BIN = fileURLToPath(import.meta.url)
@@ -113,6 +114,17 @@ function oneLine(state) {
   return `${mark} :${state.port}  pid=${state.pid}  ${status === 'running' ? '运行中' : status === 'dead' ? '进程已不在' : 'PID 已被其它进程占用'}`
 }
 
+/** 用缓存（不联网）提示一下有没有新版本。 */
+function printCachedUpdateHint(stateDir) {
+  const cached = readUpdateCache(updateCacheFile(stateDir))
+  if (!cached?.latest) return
+  if (compareVersions(cached.latest, VERSION) <= 0) return
+  for (const line of upgradeHint({ name: NAME, current: VERSION, latest: cached.latest })) {
+    console.log(`  ${line}`)
+  }
+  console.log('')
+}
+
 /** 挑出要操作的实例。 */
 function resolveTarget(states, port) {
   if (port) {
@@ -177,15 +189,18 @@ async function runCommand(cmd, args) {
       const state = readState(stateFileFor(port, dir))
       if (!state) {
         console.log(`没有找到 :${port} 的运行记录（状态目录 ${dir}）`)
+        printCachedUpdateHint(dir)
         process.exitCode = 1
         return
       }
       printState({ ...state, stateDir: dir })
+      printCachedUpdateHint(dir)
       return
     }
     const states = listStates(dir).map((s) => ({ ...s, stateDir: dir }))
     if (states.length === 0) {
       console.log(`没有运行中的实例（状态目录 ${dir}）`)
+      printCachedUpdateHint(dir)
       return
     }
     console.log(`状态目录: ${dir}\n`)
@@ -193,6 +208,7 @@ async function runCommand(cmd, args) {
       printState(s)
       console.log('')
     }
+    printCachedUpdateHint(states[0]?.stateDir || dir)
     return
   }
 
@@ -345,6 +361,7 @@ async function startDaemon(argv, cfg) {
     console.log('  还没有任何账号 —— 打开 /login 创建第一个管理员')
     console.log(`  初始化口令: ${ready.state.setupToken}`)
   }
+  printCachedUpdateHint(cfg.stateDir)
   console.log(`\n  停止: ${NAME} stop${cfg.port === 25250 ? '' : ` --port ${cfg.port}`}`)
   console.log(`  重启: ${NAME} restart${cfg.port === 25250 ? '' : ` --port ${cfg.port}`}`)
   console.log(`  状态: ${NAME} status`)
@@ -511,6 +528,24 @@ async function main() {
     console.log('  static root: 未绑定目录（--no-files）')
   }
   console.log(`  pid: ${process.pid}   停止: ${NAME} stop${cfg.port === 25250 ? '' : ` --port ${cfg.port}`}`)
+  // 后台异步查新版本，不阻塞启动；24 小时内只联网一次
+  if (!cfg.noUpdateCheck) {
+    void checkForUpdate({
+      name: NAME,
+      current: VERSION,
+      cacheFile: updateCacheFile(cfg.stateDir),
+      registry: cfg.registry,
+    })
+      .then((result) => {
+        if (!result?.newer) return
+        console.log('')
+        for (const line of upgradeHint({ name: NAME, current: VERSION, latest: result.latest })) {
+          console.log(`  ${line}`)
+        }
+        console.log('')
+      })
+      .catch(() => {})
+  }
   for (const ip of lanAddresses()) console.log(`  reachable at http://${ip}:${cfg.port}`)
   if (!cfg.authEnabled) {
     console.warn(

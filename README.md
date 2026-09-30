@@ -229,6 +229,7 @@ curl -u admin:s3cret http://example.com:25250/report.pdf -O
 | `--check-ip <ip>` | `OHMY_CHECK_IP` | – | 诊断：只打印来自该 IP 的请求会免认证还是需要密码，然后退出 |
 | `--no-xff` | – | 关 | 即使对端可信也不采信 `X-Forwarded-For` |
 | `--public` | `OHMY_PUBLIC` | `/healthz` | 免认证路径，可重复或用逗号分隔 |
+| `--no-update-check` | `OHMY_NO_UPDATE_CHECK=1` | 关 | 不去 npm 查新版本（`NO_UPDATE_NOTIFIER=1` / `CI=true` 也会跳过） |
 | `-q`, `--quiet` | – | 关 | 不打印访问日志 |
 | `-v`, `--version` | – | – | 打印版本 |
 | `-h`, `--help` | – | – | 打印帮助 |
@@ -610,6 +611,24 @@ mkdir -p /tmp/try && cd /tmp/try
 npm i /path/to/oh-my-http-0.1.0.tgz
 ./node_modules/.bin/oh-my-http . --pass s3cret --port 25250
 ```
+
+## 新版本提示
+
+启动时会**异步**（不阻塞监听）去 npm 查一下最新版本，有新版就在启动日志里多两行：
+
+```
+  有新版本可用：0.1.1 → 0.1.2
+  升级：npm i -g oh-my-http
+```
+
+`oh-my-http status` 也会用缓存提示一次，方便你回头看。
+
+几个细节：
+
+- **24 小时最多联网一次**，结果缓存在 `~/.oh-my-http/update-check.json`（失败也会记时间，离线环境不会每次启动都去连）
+- 只请求 `https://registry.npmjs.org/oh-my-http/latest`，不发送任何信息
+- 关掉：`--no-update-check`、`OHMY_NO_UPDATE_CHECK=1`，或通用的 `NO_UPDATE_NOTIFIER=1`；在 CI 里（`CI=true`）自动跳过
+- 用私有镜像 / 企业代理：`OHMY_REGISTRY=https://npm.your-company.com`
 
 ## 安全说明
 

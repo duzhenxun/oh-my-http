@@ -28,8 +28,11 @@
 
 ### 其它
 
+- **启动时提示新版本**：异步去 npm 查最新版本并给出升级命令（24 小时最多一次、带缓存、离线安全），
+  `oh-my-http status` 也会用缓存提示；`--no-update-check` / `OHMY_NO_UPDATE_CHECK=1` / `NO_UPDATE_NOTIFIER=1` / `CI=true` 可关闭，
+  `OHMY_REGISTRY` 可换成私有镜像。
 - `package.json` 补上 `repository` / `homepage` / `bugs`。
-- 单元测试 71 个、端到端冒烟 180 项。
+- 单元测试 76 个、端到端冒烟 188 项。
 
 ## 0.1.0
 

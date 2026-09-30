@@ -854,6 +854,92 @@ console.log('\n16. --require-auth：不给密码，首次访问创建管理员')
   }
 }
 
+
+console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）')
+{
+  const http = await import('node:http')
+  const regDir = path.join(workdir, 'upd')
+  await mkdir(regDir, { recursive: true })
+  const registry = http.createServer((req, res) => {
+    if (req.url === '/oh-my-http/latest') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ version: '99.0.0' }))
+      return
+    }
+    res.writeHead(404)
+    res.end()
+  })
+  await new Promise((r) => registry.listen(0, '127.0.0.1', r))
+  const regUrl = `http://127.0.0.1:${registry.address().port}`
+
+  const runFg = async (extraArgs, stateDir) => {
+    const port = await freePort()
+    const child = spawn(process.execPath, [bin, '--no-files', '--no-default-trusted', '--port', String(port), '--foreground', ...extraArgs], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, OHMY_STATE_DIR: stateDir, OHMY_REGISTRY: regUrl, OHMY_USERS_FILE: 'none' },
+    })
+    let out = ''
+    child.stdout.on('data', (d) => (out += d))
+    child.stderr.on('data', (d) => (out += d))
+    const deadline = Date.now() + 8000
+    while (!out.includes('listening') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50))
+    // 等异步的版本检查回来
+    const h2 = Date.now() + 4000
+    while (!/有新版本/.test(out) && Date.now() < h2 && !extraArgs.includes('--no-update-check')) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    await new Promise((r) => setTimeout(r, 300))
+    return { child, out, port }
+  }
+
+  try {
+    const dir1 = path.join(regDir, 'state1')
+    const first = await runFg([], dir1)
+    check('有新版时提示升级', /有新版本可用：0\.1\.1 → 99\.0\.0/.test(first.out), first.out.split('\n').filter(Boolean).pop())
+    check('提示里给出升级命令', /npm i -g oh-my-http/.test(first.out))
+    check('启动本身不受影响', /listening on/.test(first.out))
+    first.child.kill('SIGTERM')
+    await new Promise((r) => setTimeout(r, 300))
+
+    const cache = JSON.parse(await readFile(path.join(dir1, 'update-check.json'), 'utf8'))
+    check('写入了检查缓存', cache.latest === '99.0.0' && Boolean(cache.checkedAt))
+
+    // status 读缓存也会提示
+    const st = await runCmd(['status'], { OHMY_STATE_DIR: dir1, OHMY_REGISTRY: regUrl })
+    check('status 也会提示升级（读缓存）', /有新版本可用/.test(st.stdout), st.stdout.trim().split('\n').pop())
+
+    // --no-update-check 关闭
+    const dir2 = path.join(regDir, 'state2')
+    const off = await runFg(['--no-update-check'], dir2)
+    check('--no-update-check 不提示', !/有新版本/.test(off.out))
+    check('--no-update-check 不写缓存', !existsSync(path.join(dir2, 'update-check.json')))
+    off.child.kill('SIGTERM')
+
+    // 已是最新版 → 不提示
+    const dir3 = path.join(regDir, 'state3')
+    const older = http.createServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ version: '0.1.1' }))
+    })
+    await new Promise((r) => older.listen(0, '127.0.0.1', r))
+    const port3 = await freePort()
+    const same = spawn(process.execPath, [bin, '--no-files', '--no-default-trusted', '--port', String(port3), '--foreground'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, OHMY_STATE_DIR: dir3, OHMY_REGISTRY: `http://127.0.0.1:${older.address().port}`, OHMY_USERS_FILE: 'none' },
+    })
+    let sameOut = ''
+    same.stdout.on('data', (d) => (sameOut += d))
+    let d3 = Date.now() + 3000
+    while (!sameOut.includes('listening') && Date.now() < d3) await new Promise((r) => setTimeout(r, 50))
+    await new Promise((r) => setTimeout(r, 1500))
+    check('已是最新版时不提示', !/有新版本/.test(sameOut))
+    same.kill('SIGTERM')
+    older.close()
+  } finally {
+    registry.close()
+  }
+}
+
 await rm(workdir, { recursive: true, force: true })
 
 console.log(`\n${failed === 0 ? green('全部通过') : red('有失败项')}: ${passed} 通过, ${failed} 失败`)
