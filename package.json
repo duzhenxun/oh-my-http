@@ -1,0 +1,61 @@
+{
+  "name": "oh-my-http",
+  "version": "0.1.0",
+  "description": "Tiny zero-dependency HTTP server with username/password auth and automatic intranet bypass",
+  "type": "module",
+  "bin": {
+    "oh-my-http": "bin/oh-my-http.js"
+  },
+  "main": "lib/index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "index.d.ts"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node bin/oh-my-http.js",
+    "demo": "node scripts/demo.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "node --test",
+    "test:all": "npm test && npm run smoke",
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "http",
+    "server",
+    "basic-auth",
+    "auth",
+    "authentication",
+    "intranet",
+    "lan",
+    "private-network",
+    "static-server",
+    "file-server",
+    "cli",
+    "zero-dependency"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/duzhenxun/oh-my-http.git"
+  },
+  "homepage": "https://github.com/duzhenxun/oh-my-http#readme",
+  "bugs": {
+    "url": "https://github.com/duzhenxun/oh-my-http/issues"
+  },
+  "author": "zhenxun",
+  "publishConfig": {
+    "access": "public"
+  }
+}
