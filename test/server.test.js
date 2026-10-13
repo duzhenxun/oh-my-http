@@ -5,7 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { basicAuthHeader } from '../lib/auth.js'
 import { loadConfig, normalizeMount } from '../lib/config.js'
-import { createServer, explainAccess, listen } from '../lib/server.js'
+import { createServer, explainAccess, isLocalRequest, listen } from '../lib/server.js'
 
 async function start(t, argv, env = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'ohmy-acc-'))
@@ -800,4 +800,87 @@ test('--require-auth + 非内网来源：创建管理员必须带初始化口令
 
   // 口令用完即失效
   assert.equal((await submit({ token, password: 'other123', confirm: 'other123' })).status, 401, '已经有账号了，不再是初始化流程')
+})
+
+test('isLocalRequest：回环 + 没走代理 + 回环仍可信，才算本机', async () => {
+  const cfg = load(['--pass', 'p'])
+  assert.equal(isLocalRequest('127.0.0.1', cfg, false), true)
+  assert.equal(isLocalRequest('127.0.0.5', cfg, false), true)
+  assert.equal(isLocalRequest('::1', cfg, false), true)
+  assert.equal(isLocalRequest('127.0.0.1', cfg, true), false, '经过代理/隧道就不算本机')
+  assert.equal(isLocalRequest('192.168.1.5', cfg, false), false)
+  assert.equal(isLocalRequest('8.8.8.8', cfg, false), false)
+  assert.equal(isLocalRequest(null, cfg, false), false)
+  assert.equal(isLocalRequest('127.0.0.1', load(['--pass', 'p', '--no-local-admin']), false), false)
+  assert.equal(isLocalRequest('127.0.0.1', load(['--pass', 'p', '--no-default-trusted']), false), false, '用 --no-default-trusted 表示本机也要认账')
+})
+
+test('本机访问自动以管理员进入 /admin（不用登录）', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'ohmy-local-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const usersFile = path.join(dir, 'users.json')
+
+  const { base } = await start(t, ['--pass', 'p', '--users-file', usersFile])
+
+  // 不用任何 cookie / Basic，直接进后台
+  const page = await fetch(`${base}/admin`)
+  assert.equal(page.status, 200)
+  const html = await page.text()
+  assert.match(html, /账号管理/)
+  assert.match(html, /本机免登录/)
+
+  const who = await (await fetch(`${base}/whoami`)).json()
+  assert.equal(who.user, 'admin')
+  assert.equal(who.role, 'admin')
+  assert.equal(who.identity, 'local', '身份来源标为 local')
+
+  // 本机还能直接改东西（CSRF 从页面里拿）
+  const csrf = /name="csrf" value="([^"]+)"/.exec(html)[1]
+  const created = await fetch(`${base}/admin/users`, {
+    method: 'POST',
+    headers: FORM,
+    body: form({ csrf, action: 'create', username: 'lily', password: 'lilypass', role: 'member' }),
+    redirect: 'manual',
+  })
+  assert.equal(created.headers.get('location'), '/admin?ok=created')
+
+  // 经过代理/隧道（XFF）就不享受本机待遇了
+  const proxied = await fetch(`${base}/admin`, { headers: { 'x-forwarded-for': '8.8.8.8' }, redirect: 'manual' })
+  assert.equal(proxied.status, 401)
+
+  // --no-local-admin 关掉
+  const off = await start(t, ['--pass', 'p', '--users-file', usersFile, '--no-local-admin'])
+  assert.equal((await fetch(`${off.base}/admin`, { redirect: 'manual' })).status, 401)
+
+  // --no-default-trusted 也关
+  const strict = await start(t, ['--pass', 'p', '--no-default-trusted', '--users-file', usersFile])
+  assert.equal((await fetch(`${strict.base}/admin`, { redirect: 'manual' })).status, 401)
+
+  // --local-admin-user 指定别的账号；没有 admin 账号时退回任意可用管理员
+  const other = path.join(dir, 'other.json')
+  const onlyZhenxun = await start(t, ['--user', 'zhenxun', '--pass', 'p', '--users-file', other])
+  const who2 = await (await fetch(`${onlyZhenxun.base}/whoami`)).json()
+  assert.equal(who2.user, 'zhenxun', '没有 admin 就用第一个可用管理员')
+  assert.equal(who2.identity, 'local')
+
+  const named = await start(t, ['--user', 'zhenxun', '--pass', 'p', '--users-file', path.join(dir, 'n2.json'), '--local-admin-user', 'zhenxun'])
+  assert.equal((await (await fetch(`${named.base}/whoami`)).json()).user, 'zhenxun')
+})
+
+test('本机免登录不会让外网白拿管理员', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'ohmy-local2-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const { base } = await start(t, ['--pass', 'p', '--users-file', path.join(dir, 'u.json')])
+
+  // 模拟 cloudflared：对端是 127.0.0.1，但 XFF 带着真实公网 IP
+  for (const ip of ['8.8.8.8', '43.129.79.220', '2001:db8::1']) {
+    const res = await fetch(`${base}/admin`, { headers: { 'x-forwarded-for': ip }, redirect: 'manual' })
+    assert.equal(res.status, 401, `${ip} 不应该被当成本机`)
+    const whoRes = await fetch(`${base}/whoami`, { headers: { 'x-forwarded-for': ip } })
+    assert.equal(whoRes.status, 401, '外部来源连 /whoami 都进不去')
+    assert.doesNotMatch(await whoRes.text(), /"user"|admin/, '更不会拿到任何身份信息')
+  }
+  // 前端转发链里混着内网地址也一样：取最靠近我们的那个不可信地址，不是 127.0.0.1
+  const chain = await fetch(`${base}/admin`, { headers: { 'x-forwarded-for': '127.0.0.1, 8.8.8.8' }, redirect: 'manual' })
+  assert.equal(chain.status, 401)
 })

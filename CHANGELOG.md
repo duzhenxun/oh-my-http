@@ -26,13 +26,21 @@
 - 后台保存过的登录保护设置会自动迁移旧字段名。
 - 目录浏览页去掉与面包屑重复的标题行。
 
+### 体验
+
+- **本机免登录进后台**：从 `127.0.0.1` 直连访问时自动以管理员身份进入 `/admin`（默认用 `admin`，
+  不存在则退用第一个可用管理员，可用 `--local-admin-user` 指定）。
+  判定要求「回环 + 未经代理（无 `X-Forwarded-For`）+ 回环仍可信」三条同时成立，
+  所以隧道 / 反向代理转发进来的请求不会被当成本机；`--no-local-admin` 或 `--no-default-trusted` 可关闭。
+- 修复 `--check-ip` 被默认后台启动抢走（不带 `-f` 时诊断内容跑进日志、退出码 1）。
+
 ### 其它
 
 - **启动时提示新版本**：异步去 npm 查最新版本并给出升级命令（24 小时最多一次、带缓存、离线安全），
   `oh-my-http status` 也会用缓存提示；`--no-update-check` / `OHMY_NO_UPDATE_CHECK=1` / `NO_UPDATE_NOTIFIER=1` / `CI=true` 可关闭，
   `OHMY_REGISTRY` 可换成私有镜像。
 - `package.json` 补上 `repository` / `homepage` / `bugs`。
-- 单元测试 76 个、端到端冒烟 188 项。
+- 单元测试 79 个、端到端冒烟 199 项。
 
 ## 0.1.0
 

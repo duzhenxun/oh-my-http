@@ -25,7 +25,14 @@ import {
   waitForState,
   writeState,
 } from '../lib/runtime.js'
-import { createServer, explainAccess, lanAddresses, listen, withAuthState } from '../lib/server.js'
+import {
+  createServer,
+  explainAccess,
+  lanAddresses,
+  listen,
+  localAdminAccount,
+  withAuthState,
+} from '../lib/server.js'
 import { checkForUpdate, compareVersions, readUpdateCache, updateCacheFile, upgradeHint } from '../lib/update.js'
 import { BANNER, NAME, VERSION } from '../lib/version.js'
 
@@ -145,6 +152,9 @@ function printState(state) {
   console.log(`  监听    : http://${state.host}:${state.port}`)
   console.log(`  认证    : ${state.authEnabled ? (state.auth === 'form' ? `登录页 /login（账号 ${state.userCount} 个）` : `Basic 弹窗（账号 ${state.userCount} 个）`) : '未启用'}`)
   if (state.usersFile) console.log(`  账号文件: ${state.usersFile}`)
+  if (state.authEnabled && state.localAdmin !== false) {
+    console.log(`  本机免登录: 从 127.0.0.1 直连访问时自动以管理员身份进入`)
+  }
   if (state.setupToken) {
     console.log(`  待初始化: 还没有账号，打开 http://127.0.0.1:${state.port}/login 创建第一个管理员`)
     console.log(`  初始化口令: ${state.setupToken}（非内网来源创建时需要填）`)
@@ -462,6 +472,8 @@ async function main() {
       userCount: store.count,
       usersFile: cfg.usersFile,
       setupToken: server.ohmy?.setupToken || null,
+      localAdmin: cfg.localAdmin !== false,
+      localAdminUser: cfg.localAdminUser || null,
       hidden: cfg.hidden,
       daemon: cfg.daemon || process.env.OHMY_DAEMON === '1',
       cwd: process.cwd(),
@@ -508,6 +520,13 @@ async function main() {
     console.log(`  账号: "${cfg.username}" 的密码已按 --reset-pass 强制改回启动参数里的值`)
   } else if (store.bootstrapResult === 'ignored') {
     console.log(`  账号: "${cfg.username}" 已存在，忽略本次 --pass（想强制改回加 --reset-pass；改密码推荐去 /admin）`)
+  }
+  if (cfg.authEnabled && cfg.localAdmin !== false) {
+    const localUser = localAdminAccount(cfg, store)
+    console.log(
+      `  本机免登录: 从 127.0.0.1 直连访问时自动以 ${localUser ? `"${localUser.username}"` : `"${cfg.localAdminUser || 'admin'}"`} 身份进入 /admin` +
+        '（--no-local-admin 可关；经代理/隧道的请求不算本机）',
+    )
   }
   if (server.ohmy?.setupToken) {
     console.log('')

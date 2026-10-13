@@ -946,6 +946,42 @@ console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）'
   }
 }
 
+
+console.log('\n18. 本机（127.0.0.1）免登录进后台')
+{
+  const port = await freePort()
+  const srv = await startServer(['--root', workdir, '--port', String(port), '--pass', PASSWORD])
+  try {
+    check('本机直连 /admin 不用登录', (await fetch(`${srv.base}/admin`)).status === 200)
+    const who = await (await fetch(`${srv.base}/whoami`)).json()
+    check('身份标为 local', who.identity === 'local', JSON.stringify({ identity: who.identity, user: who.user }))
+    check('自动用的是管理员账号', who.role === 'admin')
+    check('页面标注“本机免登录”', /本机免登录/.test(await (await fetch(`${srv.base}/admin`)).text()))
+
+    // 经过代理/隧道（带 XFF）就不能白拿管理员
+    check('带 XFF 就要登录', (await fetch(`${srv.base}/admin`, { headers: { 'x-forwarded-for': '8.8.8.8' }, redirect: 'manual' })).status === 401)
+    check('XFF 链里带内网地址也一样', (await fetch(`${srv.base}/admin`, { headers: { 'x-forwarded-for': '127.0.0.1, 8.8.8.8' }, redirect: 'manual' })).status === 401)
+  } finally {
+    srv.stop()
+  }
+
+  const p2 = await freePort()
+  const off = await startServer(['--root', workdir, '--port', String(p2), '--pass', PASSWORD, '--no-local-admin'])
+  try {
+    check('--no-local-admin 后本机也要登录', (await fetch(`${off.base}/admin`, { redirect: 'manual' })).status === 401)
+  } finally {
+    off.stop()
+  }
+
+  const p3 = await freePort()
+  const strict = await startServer(['--root', workdir, '--port', String(p3), '--pass', PASSWORD, '--no-default-trusted'])
+  try {
+    check('--no-default-trusted 也关掉本机免登录', (await fetch(`${strict.base}/admin`, { redirect: 'manual' })).status === 401)
+  } finally {
+    strict.stop()
+  }
+}
+
 await rm(workdir, { recursive: true, force: true })
 
 console.log(`\n${failed === 0 ? green('全部通过') : red('有失败项')}: ${passed} 通过, ${failed} 失败`)

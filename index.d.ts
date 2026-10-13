@@ -15,7 +15,7 @@ export type Role = 'admin' | 'member'
 
 export interface AccessDecision {
   allowed: boolean
-  method: 'public' | 'anonymous' | 'intranet-bypass' | 'password' | 'session' | 'none'
+  method: 'public' | 'anonymous' | 'intranet-bypass' | 'password' | 'session' | 'local' | 'none'
   ip: string | null
   peer: string | null
   viaProxy: boolean
@@ -103,6 +103,10 @@ export interface ServerConfig {
   registry: string
   /** 关掉新版本检查 */
   noUpdateCheck: boolean
+  /** 本机（回环、且未经代理）访问时自动以管理员身份进入，默认 true */
+  localAdmin: boolean
+  /** 本机自动登录优先使用的账号名，默认 "admin"；不存在时退用任意可用管理员 */
+  localAdminUser: string
   /** 命令行是否显式指定了上面这些（显式时优先于后台设置） */
   accountMaxAttemptsExplicit: boolean
   ipMaxAttemptsExplicit: boolean
@@ -325,12 +329,16 @@ export interface AuthState {
 }
 
 export function evaluateAccess(req: IncomingMessage, cfg: ServerConfig, state?: AuthState): AccessDecision
+/** 是不是“纯本机”访问（回环 + 没经过代理 + 回环仍可信）。 */
+export function isLocalRequest(ip: string | null, cfg: ServerConfig, viaProxy: boolean): boolean
+/** 本机自动登录用的管理员账号：优先 --local-admin-user，其次任意可用管理员。 */
+export function localAdminAccount(cfg: ServerConfig, store: AccountStore | null): AccountRecord | null
 /** 当前请求的登录用户；未登录返回 null。 */
 export function authenticatedUser(
   req: IncomingMessage,
   cfg: ServerConfig,
   state?: AuthState,
-): { username: string; role: Role; method: 'session' | 'password' } | null
+): { username: string; role: Role; method: 'session' | 'password' | 'local' } | null
 /** 配置有没有启用认证（有账号、给了密码，或 --require-auth；--allow-anonymous 时为 false）。 */
 export function isAuthEnabled(cfg: ServerConfig): boolean
 /** 启用了认证但一个账号都没有 → 需要首次创建管理员。 */
