@@ -872,6 +872,8 @@ console.log('\n16. --require-auth：不给密码，首次访问创建管理员')
 
 console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）')
 {
+  // CI=true / NO_UPDATE_NOTIFIER 会默认关掉版本检查，这里显式打开，否则本地能过、CI 会挂
+  const updateEnv = { CI: undefined, NO_UPDATE_NOTIFIER: undefined, OHMY_NO_UPDATE_CHECK: undefined }
   const http = await import('node:http')
   const regDir = path.join(workdir, 'upd')
   await mkdir(regDir, { recursive: true })
@@ -891,7 +893,7 @@ console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）'
     const port = await freePort()
     const child = spawn(process.execPath, [bin, '--no-files', '--no-default-trusted', '--port', String(port), '--foreground', ...extraArgs], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, OHMY_STATE_DIR: stateDir, OHMY_REGISTRY: regUrl, OHMY_USERS_FILE: 'none' },
+      env: { ...process.env, ...updateEnv, OHMY_STATE_DIR: stateDir, OHMY_REGISTRY: regUrl, OHMY_USERS_FILE: 'none' },
     })
     let out = ''
     child.stdout.on('data', (d) => (out += d))
@@ -924,7 +926,7 @@ console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）'
     check('写入了检查缓存', cache.latest === '99.0.0' && Boolean(cache.checkedAt))
 
     // status 读缓存也会提示
-    const st = await runCmd(['status'], { OHMY_STATE_DIR: dir1, OHMY_REGISTRY: regUrl })
+    const st = await runCmd(['status'], { ...updateEnv, OHMY_STATE_DIR: dir1, OHMY_REGISTRY: regUrl })
     check('status 也会提示升级（读缓存）', /有新版本可用/.test(st.stdout), st.stdout.trim().split('\n').pop())
 
     // --no-update-check 关闭
@@ -944,7 +946,7 @@ console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）'
     const port3 = await freePort()
     const same = spawn(process.execPath, [bin, '--no-files', '--no-default-trusted', '--port', String(port3), '--foreground'], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, OHMY_STATE_DIR: dir3, OHMY_REGISTRY: `http://127.0.0.1:${older.address().port}`, OHMY_USERS_FILE: 'none' },
+      env: { ...process.env, ...updateEnv, OHMY_STATE_DIR: dir3, OHMY_REGISTRY: `http://127.0.0.1:${older.address().port}`, OHMY_USERS_FILE: 'none' },
     })
     let sameOut = ''
     same.stdout.on('data', (d) => (sameOut += d))
