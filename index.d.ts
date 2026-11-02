@@ -239,6 +239,26 @@ export interface LockPolicySettings {
   accountMaxAttempts?: number | string
   ipMaxAttempts?: number | string
   lockoutMinutes?: number | string
+  /** 后台加的子目录绑定（改完立即生效，不需要重启） */
+  mounts?: MountBinding[]
+}
+
+/** 一条绑定：URL 前缀 -> 本机目录。mount 为 "/" 表示默认目录（挂在 / 的那条）。 */
+export interface MountBinding {
+  /** 访问路径，总是 / 开头且不带尾部斜杠，如 "/abc"；"/" 表示默认目录 */
+  mount: string
+  /** 绝对路径形式的本地目录 */
+  root: string
+  /** 这条路径自己的口令（scrypt 哈希）；没有就跟随主站认证 */
+  auth?: MountBindingAuth
+}
+
+/** 子路径独立口令的哈希记录（不存明文）。username 为空表示「只校验密码」。 */
+export interface MountBindingAuth {
+  username: string
+  algo: 'scrypt' | 'sha256'
+  salt?: string
+  hash: string
 }
 
 /** 一条锁定/失败记录。 */
@@ -453,7 +473,46 @@ export function serveStatic(
   res: ServerResponse,
   cfg: ServerConfig,
   urlPath: string,
+  /** 指定这次要用哪条绑定；不传就用 cfg.root / cfg.mount */
+  binding?: Pick<MountBinding, 'mount' | 'root'> | null,
 ): Promise<void>
+
+// ---------------------------------------------------------------------------
+// 子目录绑定
+// ---------------------------------------------------------------------------
+
+/** 展开 ~ / ~/xxx，相对路径按 cwd 解析，返回绝对路径。 */
+export function expandDir(input: string, cwd?: string): string
+/**
+ * 规范化绑定路径：必须 / 开头，拒绝 . / .. / 空格 / ? / #。
+ * allowRoot=true 时允许 '/'（后台的「默认目录」）。
+ */
+export function normalizeBindPath(input: string, options?: { allowRoot?: boolean }): string
+/** 这个路径是否被内置接口占用（/admin、/login、/api…）。 */
+export function isReservedMount(mount: string): boolean
+/** 校验并规范化一条绑定；verifyDir=false 时只做结构校验。 */
+export function normalizeBinding(
+  raw: { mount?: string; root?: string; path?: string; dir?: string },
+  options?: { cwd?: string; verifyDir?: boolean; allowRoot?: boolean },
+): MountBinding
+/** 容错版：坏条目丢掉，同路径只留第一条，目录不存在也保留。 */
+export function normalizeBindings(list: unknown): MountBinding[]
+/** 按最长前缀匹配绑定，没命中返回 null。'/' 是兜底绑定，子路径总能赢过它。 */
+export function matchBinding(urlPath: string, bindings: MountBinding[]): MountBinding | null
+/** 绑定表里的默认目录（挂在 / 的那条，没有则为 null）。 */
+export function defaultBinding(bindings: MountBinding[]): MountBinding | null
+/** 独立口令的密码最少位数。 */
+export const MIN_BIND_PASSWORD: number
+/** 规范化一条独立的子路径口令；传明文密码时会就地做 scrypt 哈希。 */
+export function normalizeBindingAuth(raw: unknown): MountBindingAuth | null
+/** 校验子路径口令；username 为空表示只校验密码。 */
+export function verifyBindingAuth(binding: MountBinding, username: string, password: string): boolean
+/** 这条绑定是否要求「账号 + 密码」（false 表示只要密码）。 */
+export function bindingNeedsUsername(binding: MountBinding): boolean
+/** scrypt 加盐哈希（账号与子路径口令共用）。 */
+export function hashScrypt(password: string): { algo: 'scrypt'; salt: string; hash: string }
+/** 校验密码与哈希记录（兼容 scrypt / sha256）。 */
+export function verifyHashed(record: { algo?: string; salt?: string; hash: string }, password: string): boolean
 
 // ---------------------------------------------------------------------------
 // 新版本检查

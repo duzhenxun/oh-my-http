@@ -30,7 +30,9 @@
     "smoke": "node scripts/smoke.mjs",
     "test": "node --test",
     "test:all": "npm test && npm run smoke",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "version": "node scripts/set-version.mjs && git add lib/version.js",
+    "release": "npm version patch -m \"v%s\""
   },
   "keywords": [
     "http",

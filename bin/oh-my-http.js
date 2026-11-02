@@ -553,6 +553,16 @@ async function main() {
   } else {
     console.log('  static root: 未绑定目录（--no-files）')
   }
+  // 后台加的子目录绑定（存在账号文件里，改完不必重启）
+  const savedBindings = store.settings?.mounts || []
+  if (savedBindings.length) {
+    console.log(`  bindings (后台配置，${savedBindings.length} 条):`)
+    for (const b of savedBindings) {
+      const where = b.mount === '/' ? '/' : `${b.mount}/`
+      const label = b.mount === '/' ? '默认目录' : '子路径'
+      console.log(`    [${label}] ${where} -> ${b.root}`)
+    }
+  }
   console.log(`  pid: ${process.pid}   停止: ${NAME} stop${cfg.port === 25250 ? '' : ` --port ${cfg.port}`}`)
   // 后台异步查新版本，不阻塞启动；24 小时内只联网一次
   if (!cfg.noUpdateCheck) {

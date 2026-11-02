@@ -408,6 +408,7 @@ XFF 链里掺了内网地址（X-Forwarded-For: 127.0.0.1, 8.8.8.8） → 401（
 | 禁用 / 启用 | 临时停掉某个账号，不用删 |
 | 删除账号 | 删了就登录不了了 |
 | 登录保护 | 改“连续失败几次锁多久”（默认 3 次 / 60 分钟），并一键解除已有锁定 |
+| 目录绑定（独立 tab） | `/admin/bindings`：默认目录 + 子路径 + 自动生成的分享链接（默认 3 天有效） |
 
 安全护栏：
 
@@ -432,6 +433,63 @@ oh-my-http --no-files      # 不绑定目录
 浏览器打开 `http://127.0.0.1:25250/` 就能看到绑定目录的内容：子目录可以逐级点开，每行都有大小和修改时间，有 `..` 回上一级，目录里有 `index.html` 时会优先展示它。
 
 **不需要 `/files/` 这层前缀**：绑定目录默认就挂在 `/`。此时首页会被目录列表取代（`/whoami` 仍可看认证状态）；想让内置首页回来就 `--mount /files`。
+
+### 目录绑定（后台设置，立即生效）
+
+`--root / --mount` 只能绑一个目录，还得重启才生效。要多挂目录、或者干脆不写命令行，就去 `/admin` 的「目录绑定」区块：
+
+| 设置项 | 作用 |
+| --- | --- |
+| 默认目录（挂在 `/`） | `http://ip:25250/` 看到的就是它；优先于命令行的 `--root` / `--mount`，清除后回退命令行（或内置首页） |
+| 子路径绑定 | `/abc` → 另一个目录；按最长前缀匹配，子路径总赢过默认目录 |
+
+目录怎么填都行，三种方式都支持：
+
+- **从下拉选**：输入框带候选（后台默认目录、命令行绑定目录、各绑定目录、家目录、当前工作目录）
+- **点着浏览**：点「浏览…」打开一个仿 Finder 的选择窗口——左边是个人收藏 / 位置 / 已绑定目录，
+  右边是带「名称 / 大小 / 类型 / 修改日期」的列表，可以点面包屑或双击文件夹逐级进入、按名字搜索，
+  选中文件夹后点「选取」回填（也能直接在上面手输）
+- **直接手输**：绝对路径或 `~/Downloads` 这种都行，粘贴过来就能存
+
+举例：
+
+| 访问路径 | 本地目录 | 结果 |
+| --- | --- | --- |
+| `/`（默认目录） | `/Users/you/site` | `http://ip:25250/` 就是 `site` 目录列表 |
+| `/abc` | `/Users/you/project` | `http://ip:25250/abc/` 是 `project` |
+| `/abc/logs` | `~/Downloads` | 更长的前缀优先，`/abc/logs/` 走 `Downloads` |
+
+- **保存后立即生效，不用重启**：路由表在每个请求里现查，加 / 改 / 删都是马上见效。
+- `/admin`、`/login`、`/logout`、`/healthz`、`/whoami`、`/api` 这些内置接口不能占用；根路径 `/` 用「默认目录」设。
+- **权限跟主目录一致**：认证 / 内网免认证 / 隐藏文件 / 目录穿越防护全都照旧生效。
+- 绑定表存在账号文件（默认 `~/.oh-my-http/users.json`）的 `settings.mounts` 里，**重启后依旧有效**；`--users-file none` 时只在内存里，重启丢失。
+- 目录暂时不存在不影响启动，那条路径返回 404，绑定不会被自动删掉（外挂盘没挂上时很实用）。
+- 启动时会打印已有的绑定；页面上的链接点进去就能验证。
+- 完全不用命令行也行：`oh-my-http --no-files --require-auth` 起来，建完管理员后在后台把默认目录和子路径都设好。
+
+#### 分享链接（自动生成口令，带有效期）
+
+不用自己想密码，也不用找「设置密码」的地方：
+
+- 添加绑定时默认勾选「自动生成访问口令」→ 系统生成一个随机口令，并立刻给出分享链接。
+- 绑定表格新增「有效期」「结束时间」两列：最近一次生成的链接是几天、什么时候到期，一眼能看到；过期会标「已过期」。
+  行内「复制链接」可以直接再复制一次当前链接。
+- 表格里每行都有「分享链接」按钮（前面可填天数，**默认 3 天**）：
+  - 没有口令的路径 → 点一下自动补上口令并生成链接；
+  - 已经能访问的路径 → 点一下就是**换密码**：重新生成口令，旧链接立即失效。
+- 不需要口令就删除这条绑定重新加（添加时不勾「自动生成访问口令」即可保持跟随主站）。
+
+链接长这样（`toke` 是令牌，也可以写 `token` / `pwd` / `key`）：
+
+```bash
+https://web.xs25.cn/gp?toke=eyJ1Ijoic2hhcmU6L2dwOjA4MzJkMmE0...
+```
+
+- 打开链接 → 验签通过 → 种一个**只作用于该路径**的 Cookie → 303 跳到不带令牌的干净地址，
+  点进子目录、下载文件都不用再输；链接可以随手发给别人。
+- 令牌里带过期时间，**默认 3 天**，到期自动失效（Cookie 也只活到那时）；过期就重新生成一个。
+- 令牌是 HMAC 签名的，不含密码；口令本身只存 scrypt 哈希，代码里没有回显密码的入口。
+- 仍然兼容老写法：直接把口令拼进 URL（`?toke=口令`）。
 
 ## 免认证规则
 
@@ -688,34 +746,34 @@ npm start -- --pass s3cret --root .
 
 ## 发布到 npm
 
+发版是**自动化**的：打一个 `v*` tag 并推上去，GitHub Actions 会校验版本、跑测试、然后
+`npm publish --provenance` 发布（npm Trusted Publishing / OIDC，不需要本地登录，也不需要把 token 存进 secrets）。
+
 ```bash
-npm login                     # 已登录可跳过（npm whoami 看一下）
-npm view oh-my-http version   # 404 表示名字还空着
-npm test                      # 71 个用例
-npm run smoke                 # 180 项端到端（可选，约 1 分钟）
+git checkout main && git pull
+
+npm version minor -m "v%s"     # 改版本号（会自动同步 lib/version.js）并打 tag
+git push --follow-tags          # 推上去 → 触发 .github/workflows/publish.yml
+```
+
+一次性配置（npmjs 上登记 Trusted Publisher）、备用 token 方案、常见问题都写在
+[RELEASING.md](RELEASING.md) 里。
+
+平时提交（不打 tag）由 `.github/workflows/ci.yml` 跑 `npm test` + 冒烟（Node 20 / 22 / 24）。
+
+本地检查打包内容 / 应急手动发布：
+
+```bash
 npm pack --dry-run            # 预览打包内容
-npm publish                   # 会先自动跑 npm test（prepublishOnly）
-```
-
-开了两步验证的账号，`npm publish` 会要一次性口令：直接跑它会打印一个
-`https://www.npmjs.com/auth/cli/...` 链接，浏览器授权即可；也可以手动带上：
-
-```bash
-npm publish --otp=123456      # 手机 Authenticator 里那 6 位
-```
-
-发布后确认：
-
-```bash
-npm view oh-my-http version   # 应该输出 0.1.0
-npx oh-my-http --version
+npm test && npm run smoke     # 单元测试 + 端到端
+npm publish --access public --otp=123456   # 应急：手动发（要手机验证码）
 ```
 
 发布计划：
 
 - 包名 `oh-my-http`，MIT，零依赖，`engines: node >= 18.17`，ESM
-- 打进包里的只有 `bin/`、`lib/`、`index.d.ts`（`files` 字段），测试与脚本不进包
-- 发版流程：改 `package.json` 的 `version` + `lib/version.js` 里的 `VERSION`（有个用例会校验两者一致）→ `npm publish`
+- 打进包里的只有 `bin/`、`lib/`、`index.d.ts`、`CHANGELOG.md`（`files` 字段），测试与脚本不进包
+- 版本号只改一处：`npm version` 会同步 `package.json` 与 `lib/version.js`（有用例校验两者一致）
 
 > 本机那个全局命令如果要用**已发布的版本**而不是源码，执行
 > `npm rm -g oh-my-http && npm i -g oh-my-http`；想让它继续跟着源码走就用 `npm link`。

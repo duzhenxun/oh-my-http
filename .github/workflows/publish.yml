@@ -1,0 +1,52 @@
+name: publish
+
+# 打 tag 即发布：git tag v0.2.0 && git push origin v0.2.0
+# 版本号必须与 package.json 一致，否则工作流直接失败（不会发错版本）。
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Trusted Publishing（OIDC）与 provenance 都需要 id-token: write
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # npm Trusted Publishing 需要 npm >= 11.5.1（Node 22 自带 10.x，这里兜底升级）
+      - name: 升级 npm
+        run: npm install -g npm@^11.5.1
+
+      - name: 校验 tag 与 package.json 版本一致
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          echo "tag=$tag  package=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} 与 package.json 的版本 ${pkg} 不一致：先 npm version 再打 tag"
+            exit 1
+          fi
+
+      - name: 跑测试
+        run: npm test
+
+      # 用 OIDC 发布（包里没有依赖，不需要 npm ci）。
+      # 如果改用 NPM_TOKEN 方案，给这一步加上：
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: 发布到 npm
+        run: npm publish --provenance --access public

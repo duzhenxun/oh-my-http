@@ -1,0 +1,28 @@
+name: ci
+
+# 平时提交就验一遍，避免到打 tag 时才发现测试挂了
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # 零依赖，不需要 npm ci
+      - name: 单元测试
+        run: npm test
+      - name: 端到端冒烟
+        run: npm run smoke

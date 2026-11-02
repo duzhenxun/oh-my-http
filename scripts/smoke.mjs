@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url'
 import { isAlive } from '../lib/runtime.js'
 
 const bin = fileURLToPath(new URL('../bin/oh-my-http.js', import.meta.url))
+/** 当前版本（发版后不用再手改断言） */
+const CURRENT_VERSION = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
 const workdir = path.join(os.tmpdir(), 'oh-my-http-smoke')
 const USERS_FILE = path.join(workdir, 'accounts.json')
 const STATE_DIR = path.join(workdir, 'state')
@@ -901,7 +903,11 @@ console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）'
   try {
     const dir1 = path.join(regDir, 'state1')
     const first = await runFg([], dir1)
-    check('有新版时提示升级', /有新版本可用：0\.1\.1 → 99\.0\.0/.test(first.out), first.out.split('\n').filter(Boolean).pop())
+    check(
+      '有新版时提示升级',
+      first.out.includes(`有新版本可用：${CURRENT_VERSION} → 99.0.0`),
+      first.out.split('\n').filter(Boolean).pop(),
+    )
     check('提示里给出升级命令', /npm i -g oh-my-http/.test(first.out))
     check('启动本身不受影响', /listening on/.test(first.out))
     first.child.kill('SIGTERM')
@@ -925,7 +931,7 @@ console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）'
     const dir3 = path.join(regDir, 'state3')
     const older = http.createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ version: '0.1.1' }))
+      res.end(JSON.stringify({ version: CURRENT_VERSION }))
     })
     await new Promise((r) => older.listen(0, '127.0.0.1', r))
     const port3 = await freePort()
