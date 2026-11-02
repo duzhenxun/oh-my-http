@@ -32,6 +32,8 @@ npm version minor -m "v%s"
 git push --follow-tags
 ```
 
+发版前把 `CHANGELOG.md` 里的 `## 未发布` 改成版本号（不改也能发，Release 说明会自动退回那一节）。
+
 工作流（`.github/workflows/publish.yml`）会：
 
 1. 校验 tag 和 `package.json` 的版本是否一致（不一致直接失败，不会发错版本）

@@ -13,8 +13,10 @@ const pkg = JSON.parse(await readFile(fileURLToPath(new URL('../package.json', i
 const changelog = await readFile(fileURLToPath(new URL('../CHANGELOG.md', import.meta.url)), 'utf8')
 
 const lines = changelog.split('\n')
-const heading = new RegExp(`^##\\s+v?${pkg.version.replace(/\./g, '\\.')}\\s*$`)
-const start = lines.findIndex((line) => heading.test(line.trim()))
+const exact = new RegExp(`^##\\s+v?${pkg.version.replace(/\./g, '\\.')}\\s*$`)
+// 没改「未发布」小节名时退回它，避免发出去的 Release 说明是空的
+let start = lines.findIndex((line) => exact.test(line.trim()))
+if (start < 0) start = lines.findIndex((line) => /^##\s+未发布\s*$/.test(line.trim()))
 
 let body = ''
 if (start >= 0) {
