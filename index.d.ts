@@ -239,6 +239,8 @@ export interface LockPolicySettings {
   accountMaxAttempts?: number | string
   ipMaxAttempts?: number | string
   lockoutMinutes?: number | string
+  /** 界面语言：zh / en / auto（auto = 跟随浏览器 Accept-Language） */
+  lang?: LangSetting
   /** 后台加的子目录绑定（改完立即生效，不需要重启） */
   mounts?: MountBinding[]
 }
@@ -475,7 +477,27 @@ export function serveStatic(
   urlPath: string,
   /** 指定这次要用哪条绑定；不传就用 cfg.root / cfg.mount */
   binding?: Pick<MountBinding, 'mount' | 'root'> | null,
+  /** 目录列表的界面语言，默认 zh */
+  lang?: Lang,
 ): Promise<void>
+
+// ---------------------------------------------------------------------------
+// 界面语言（中文 / English）
+// ---------------------------------------------------------------------------
+
+export type Lang = 'zh' | 'en'
+/** 语言设置的取值：auto = 跟随浏览器 Accept-Language */
+export type LangSetting = Lang | 'auto'
+
+/** 规范化语言设置；无法识别时返回 fallback。 */
+export function normalizeLang(raw: unknown, fallback?: LangSetting): LangSetting
+/** 本次请求用哪种语言：显式设置优先，auto 看 Accept-Language，兜底 zh。 */
+export function pickLang(saved: unknown, acceptLanguage?: string | null): Lang
+/** 生成翻译函数：t('nav.files') / t('common.days', { n: 3 }) */
+export function createT(lang: Lang | string): (key: string, vars?: Record<string, unknown>) => string
+/** 词典里是否有这个 key（后台用它决定回退文案）。 */
+export function hasKey(key: string): boolean
+export const LANGS: readonly Lang[]
 
 // ---------------------------------------------------------------------------
 // 子目录绑定
