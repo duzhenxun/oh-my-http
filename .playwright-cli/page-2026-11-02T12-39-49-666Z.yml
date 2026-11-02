@@ -1,0 +1,89 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - heading "Directory bindings" [level=1] [ref=e4]
+      - generic [ref=e5]: oh-my-http · signed in as admin (administrator)
+    - generic [ref=e6]:
+      - link "Files" [ref=e7] [cursor=pointer]:
+        - /url: /
+      - text: ·
+      - link "Status" [ref=e8] [cursor=pointer]:
+        - /url: /whoami
+      - text: ·
+      - link "Sign out" [ref=e9] [cursor=pointer]:
+        - /url: /logout
+      - text: ·
+      - generic "Language" [ref=e10]:
+        - button "中文" [ref=e12] [cursor=pointer]
+        - generic [ref=e13]: /
+        - generic [ref=e14]: English
+  - generic [ref=e15]:
+    - link "Accounts" [ref=e16] [cursor=pointer]:
+      - /url: /admin
+    - link "Directory bindings" [ref=e17] [cursor=pointer]:
+      - /url: /admin/bindings
+  - generic [ref=e18]: Language switched
+  - generic [ref=e19]:
+    - heading "Default directory (mounted at /)" [level=2] [ref=e20]
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: Directory
+        - combobox "Directory" [ref=e24]
+      - button "Browse…" [ref=e25] [cursor=pointer]
+      - button "Save" [ref=e26] [cursor=pointer]
+    - paragraph [ref=e27]:
+      - text: "Current default directory:"
+      - code [ref=e28]: /tmp/readme-demo/site
+      - text: (from the CLI (--root); save above to move it here)
+  - generic [ref=e29]:
+    - heading "Sub-path bindings" [level=2] [ref=e30]
+    - generic [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]: Path
+        - textbox "Path" [ref=e34]:
+          - /placeholder: /abc
+      - generic [ref=e35]:
+        - generic [ref=e36]: Local directory
+        - combobox "Local directory" [ref=e37]
+      - button "Browse…" [ref=e38] [cursor=pointer]
+      - generic [ref=e39]:
+        - checkbox "Generate an access password automatically (no typing)" [checked] [ref=e40]
+        - text: Generate an access password automatically (no typing)
+      - button "Bind" [ref=e41] [cursor=pointer]
+    - paragraph [ref=e42]: With “Generate an access password automatically”, a random password is created for you (independent of the main accounts and intranet bypass) and a share link is issued right away (3 days by default). Leave it unchecked to follow the main auth. To change the password later, just regenerate the share link — the old one stops working immediately.
+    - table [ref=e43]:
+      - rowgroup [ref=e44]:
+        - row "Path Local directory Access Validity Expires" [ref=e45]:
+          - columnheader "Path" [ref=e46]
+          - columnheader "Local directory" [ref=e47]
+          - columnheader "Access" [ref=e48]
+          - columnheader "Validity" [ref=e49]
+          - columnheader "Expires" [ref=e50]
+          - columnheader [ref=e51]
+      - rowgroup [ref=e52]:
+        - row "/assets/ /tmp/readme-demo/site/assets password only 3 days 2026-11-05 20:33 Copy link 3 Regenerate share link Delete" [ref=e53]:
+          - cell /assets/ [ref=e54]:
+            - link /assets/ [ref=e55] [cursor=pointer]:
+              - /url: /assets/
+              - code [ref=e56]: /assets/
+          - cell "/tmp/readme-demo/site/assets" [ref=e57]:
+            - code [ref=e58]: /tmp/readme-demo/site/assets
+          - cell "password only" [ref=e59]:
+            - generic [ref=e60]: password only
+          - cell "3 days" [ref=e61]
+          - cell "2026-11-05 20:33" [ref=e62]
+          - cell "Copy link 3 Regenerate share link Delete" [ref=e63]:
+            - button "Copy link" [ref=e64] [cursor=pointer]
+            - generic [ref=e65]:
+              - spinbutton "validity (days)" [ref=e66]: "3"
+              - button "Regenerate share link" [ref=e67] [cursor=pointer]
+            - button "Delete" [ref=e69] [cursor=pointer]
+  - generic [ref=e70]:
+    - heading "Share link" [level=2] [ref=e71]
+    - paragraph [ref=e72]: "Changes apply immediately, no restart: the default directory decides what / shows, and a sub-path points a prefix like /abc at another directory. Pick a directory with “Browse…”, or type an absolute path or ~/xxx."
+    - paragraph [ref=e73]: Paths match by longest prefix, so you can nest them (/abc/logs); sub-paths always win over the default directory. Built-in routes (/admin, /login, /healthz, /whoami, /api) cannot be taken.
+    - paragraph [ref=e74]: If a directory disappears the path returns 404 and the binding is kept (handy for removable disks). Passwords are scrypt-hashed; repeated failures are locked and can be cleared from Accounts → Current locks / failures. Share links look like http://host/path?toke=token (token / pwd / key also work); the token expires (3 days by default, adjustable per row), and a successful visit sets a cookie with the same lifetime and redirects to a clean URL. The old style of putting the password in the URL still works.
+    - paragraph [ref=e75]:
+      - text: Bindings are stored in settings.mounts inside
+      - code [ref=e76]: /tmp/readme-demo/users.json
+      - text: and survive restarts.

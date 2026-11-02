@@ -1,0 +1,94 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - heading "账号管理" [level=1] [ref=e4]
+      - generic [ref=e5]: oh-my-http · 当前登录 admin（管理员）
+    - generic [ref=e6]:
+      - link "文件" [ref=e7] [cursor=pointer]:
+        - /url: /
+      - text: ·
+      - link "状态" [ref=e8] [cursor=pointer]:
+        - /url: /whoami
+      - text: ·
+      - link "退出登录" [ref=e9] [cursor=pointer]:
+        - /url: /logout
+      - text: ·
+      - generic "语言" [ref=e10]:
+        - generic [ref=e11]: 中文
+        - generic [ref=e12]: /
+        - button "English" [ref=e14] [cursor=pointer]
+  - generic [ref=e15]:
+    - link "账号管理" [ref=e16] [cursor=pointer]:
+      - /url: /admin
+    - link "目录绑定" [ref=e17] [cursor=pointer]:
+      - /url: /admin/bindings
+  - generic [ref=e18]: 界面语言已切换
+  - generic [ref=e19]:
+    - heading "添加账号" [level=2] [ref=e20]
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: 用户名
+        - textbox "用户名" [ref=e24]:
+          - /placeholder: alice
+      - generic [ref=e25]:
+        - generic [ref=e26]: 密码
+        - textbox "密码" [ref=e27]:
+          - /placeholder: 至少 6 位
+      - generic [ref=e28]:
+        - generic [ref=e29]: 角色
+        - combobox "角色" [ref=e30]:
+          - option "成员（只能看文件）" [selected]
+          - option "管理员（可管理账号）"
+      - button "创建" [ref=e31] [cursor=pointer]
+  - generic [ref=e32]:
+    - heading "登录保护" [level=2] [ref=e33]
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]: 同一账号失败几次锁定
+        - spinbutton "同一账号失败几次锁定" [ref=e37]: "3"
+      - generic [ref=e38]:
+        - generic [ref=e39]: 同一 IP 失败几次锁定
+        - spinbutton "同一 IP 失败几次锁定" [ref=e40]: "0"
+      - generic [ref=e41]:
+        - generic [ref=e42]: 锁定时长（分钟）
+        - spinbutton "锁定时长（分钟）" [ref=e43]: "60"
+      - button "保存" [ref=e44] [cursor=pointer]
+    - paragraph [ref=e45]: 当前策略：同一账号失败 3 次锁 60 分钟；按 IP 锁定已关闭（0，推荐：隧道 / 反代 / 公司出口后面大家共用一个 IP，开了会误伤整片人）。填 0 表示该维度不锁。
+    - paragraph [ref=e46]: 表单登录和 curl -u 共用这把锁；同一个错误密码重复提交只算一次；锁定期间连正确密码也会被拒。当前被锁的键：0 个。
+    - generic [ref=e47]: 当前用的是默认值（3 次 / 60 分钟）。保存一次后就会持久化到这个账号文件里。
+    - paragraph [ref=e48]: 内网免认证的来源不受影响，即使被锁也能从局域网直接进来。
+  - generic [ref=e49]:
+    - heading "共 1 个账号" [level=2] [ref=e50]
+    - table [ref=e51]:
+      - rowgroup [ref=e52]:
+        - row "用户名 角色 状态 创建时间 最近登录" [ref=e53]:
+          - columnheader "用户名" [ref=e54]
+          - columnheader "角色" [ref=e55]
+          - columnheader "状态" [ref=e56]
+          - columnheader "创建时间" [ref=e57]
+          - columnheader "最近登录" [ref=e58]
+          - columnheader [ref=e59]
+      - rowgroup [ref=e60]:
+        - row "admin 你 管理员 正常 2026-11-02 20:32 2026-11-02 20:32 重置密码 降为成员 禁用 删除" [ref=e61]:
+          - cell "admin 你" [ref=e62]:
+            - text: admin
+            - generic [ref=e63]: 你
+          - cell "管理员" [ref=e64]:
+            - generic [ref=e65]: 管理员
+          - cell "正常" [ref=e66]:
+            - generic [ref=e67]: 正常
+          - cell "2026-11-02 20:32" [ref=e68]
+          - cell "2026-11-02 20:32" [ref=e69]
+          - cell "重置密码 降为成员 禁用 删除" [ref=e70]:
+            - generic [ref=e71]:
+              - textbox "新密码" [ref=e72]
+              - button "重置密码" [ref=e73] [cursor=pointer]
+            - button "降为成员" [ref=e75] [cursor=pointer]
+            - button "禁用" [ref=e77] [cursor=pointer]
+            - button "删除" [disabled] [ref=e78] [cursor=pointer]
+  - generic [ref=e79]:
+    - heading "状态" [level=2] [ref=e80]
+    - paragraph [ref=e81]:
+      - text: 账号保存在
+      - code [ref=e82]: /tmp/readme-demo/users.json
+      - text: ，密码用 scrypt 加盐哈希存储，文件权限 0600。会话密钥也保存在这里，所以登录状态在服务重启后依旧有效；把该文件删掉才会让所有人重新登录。

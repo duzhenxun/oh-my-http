@@ -9,6 +9,24 @@ npx oh-my-http ~/Downloads                 # serve it, open http://127.0.0.1:252
 npx oh-my-http ~/Downloads --pass s3cret   # add a password (the LAN still bypasses it)
 ```
 
+## Screenshots
+
+Directory browsing (the directory is mounted at `/`):
+
+![Directory browsing](docs/screenshots/browse.en.png)
+
+Directory bindings: default directory plus sub-paths, per-path passwords and share links (validity / expiry / copy):
+
+![Directory bindings](docs/screenshots/bindings.en.png)
+
+“Browse…” opens a Finder-style folder picker (Favourites / Locations / Bindings):
+
+![Folder picker](docs/screenshots/dir-picker.en.png)
+
+The UI ships in Chinese and English — switch at the top right (Chinese version: [README.md](README.md)).
+
+![Chinese UI](docs/screenshots/bindings.png)
+
 ## Features
 
 - **Zero dependencies** — only Node built-ins; `npm i -g` and you are done

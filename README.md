@@ -9,6 +9,24 @@ npx oh-my-http ~/Downloads                 # 起服务，浏览器打开 http://
 npx oh-my-http ~/Downloads --pass s3cret   # 加个密码（内网仍然免登录）
 ```
 
+## 界面预览
+
+目录浏览（挂在 `/`）：
+
+![目录浏览](docs/screenshots/browse.png)
+
+目录绑定：默认目录 + 子路径、独立口令与分享链接（有效期 / 结束时间 / 复制链接）：
+
+![目录绑定](docs/screenshots/bindings.png)
+
+点「浏览…」打开仿 Finder 的目录选择弹窗（个人收藏 / 位置 / 已绑定）：
+
+![目录选择](docs/screenshots/dir-picker.png)
+
+界面支持中英文，右上角一键切换（英文版见 [README.en.md](README.en.md)）：
+
+![English UI](docs/screenshots/bindings.en.png)
+
 ## 特性
 
 - **零依赖**：只用 Node 内置模块，`npm i -g` 之后一条命令即用
