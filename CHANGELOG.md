@@ -1,5 +1,17 @@
 # 更新日志
 
+## 0.3.1
+
+### 修复
+
+- 目录选择弹窗底部按钮错位：`选取` 用了 `.primary`，撞上登录页的全局 `button.primary`（`width:100%`、`margin-top:1.4rem`），
+  footer 被撑到 87px、两个按钮一高一低；改用独立的 `.mk-primary`，footer 回到 52px、按钮对齐，列表底部补了留白。
+
+### 文档
+
+- README 中英文各配一套界面截图（目录浏览 / 目录绑定 / 仿 Finder 目录选择弹窗），`docs/` 一并打进 npm 包。
+- 发布说明支持按版本写双语文件 `docs/releases/<version>.md`；缺失时仍从 CHANGELOG 对应小节生成（并回退「未发布」）。
+
 ## 0.3.0
 
 ### 中英文界面

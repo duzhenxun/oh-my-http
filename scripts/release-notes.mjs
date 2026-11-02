@@ -12,14 +12,22 @@ import { fileURLToPath } from 'node:url'
 const pkg = JSON.parse(await readFile(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'))
 const changelog = await readFile(fileURLToPath(new URL('../CHANGELOG.md', import.meta.url)), 'utf8')
 
+// 优先用 docs/releases/<version>.md（可以写双语、可以手写）；没有就从 CHANGELOG 抽
+let custom = ''
+try {
+  custom = (await readFile(fileURLToPath(new URL(`../docs/releases/${pkg.version}.md`, import.meta.url)), 'utf8')).trim()
+} catch {
+  custom = ''
+}
+
 const lines = changelog.split('\n')
 const exact = new RegExp(`^##\\s+v?${pkg.version.replace(/\./g, '\\.')}\\s*$`)
 // 没改「未发布」小节名时退回它，避免发出去的 Release 说明是空的
 let start = lines.findIndex((line) => exact.test(line.trim()))
 if (start < 0) start = lines.findIndex((line) => /^##\s+未发布\s*$/.test(line.trim()))
 
-let body = ''
-if (start >= 0) {
+let body = custom
+if (!body && start >= 0) {
   const rest = lines.slice(start + 1)
   const end = rest.findIndex((line) => /^##\s/.test(line))
   body = (end < 0 ? rest : rest.slice(0, end)).join('\n').trim()
