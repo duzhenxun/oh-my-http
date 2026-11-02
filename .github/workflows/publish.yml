@@ -7,9 +7,10 @@ on:
     tags:
       - 'v*'
 
-# Trusted Publishing（OIDC）与 provenance 都需要 id-token: write
+# Trusted Publishing（OIDC）与 provenance 需要 id-token: write；
+# 建 GitHub Release 需要 contents: write
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 concurrency:
@@ -50,3 +51,19 @@ jobs:
       #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: 发布到 npm
         run: npm publish --provenance --access public
+
+      # 顺便建一个 GitHub Release（notes 从 CHANGELOG.md 里当前版本那一节取）
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/release-notes.mjs > "$RUNNER_TEMP/release-notes.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME 已存在，只更新说明"
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --verify-tag
+          fi

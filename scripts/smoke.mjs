@@ -705,8 +705,15 @@ console.log('\n14. 默认后台启动（不用加 -d）')
   const stateFile = path.join(STATE_DIR, `state-${port}.json`)
   const args = ['--root', workdir, '--pass', PASSWORD, '--no-default-trusted', '--port', String(port), '--users-file', USERS_FILE]
 
-  // 注意：这里故意不加 --foreground / -d，验证默认行为
-  const started = await runCmd(args)
+  // 注意：这里故意不加 --foreground / -d，验证默认行为。
+  // 但 CI runner 本身跑在 systemd 下（会带上 INVOCATION_ID 等），那种环境里程序会自动切前台，
+  // 所以要先把这些变量清掉，模拟“普通终端里直接执行”。
+  const started = await runCmd(args, {
+    INVOCATION_ID: undefined,
+    NOTIFY_SOCKET: undefined,
+    OHMY_CONTAINER: undefined,
+    OHMY_FOREGROUND: undefined,
+  })
   check('不带任何后台参数也能后台启动', started.code === 0, `exit=${started.code} ${started.stderr.trim()}`)
   check('提示已在后台启动并给出 PID', /已在后台启动（pid=\d+）/.test(started.stdout))
   check('提示了 stop / restart / status', /stop/.test(started.stdout) && /restart/.test(started.stdout))
