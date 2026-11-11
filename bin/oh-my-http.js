@@ -455,6 +455,15 @@ const stripDaemon = (argv) => argv.filter((a) => a !== '-d' && a !== '--daemon')
 async function startDaemon(argv, cfg) {
   const { file: logFile, fd } = openLog(cfg.port, cfg.stateDir)
   const stateFile = stateFileFor(cfg.port, cfg.stateDir)
+
+  // 端口上已经有活着的实例：直接拒绝，别先删状态文件（那会把正在跑的实例变成“孤儿”）
+  const existing = readState(stateFile)
+  if (existing && stateStatus(existing) === 'running') {
+    console.error(`${NAME}: :${cfg.port} 已经有一个实例在跑（pid=${existing.pid}，目录 ${existing.root || '-'}）`)
+    console.error(`  要换参数：先 ${NAME} stop --port ${cfg.port}，或用 ${NAME} restart --port ${cfg.port}`)
+    process.exitCode = 1
+    return
+  }
   removeState(stateFile)
 
   const child = spawn(process.execPath, [BIN, ...stripDaemon(argv)], {

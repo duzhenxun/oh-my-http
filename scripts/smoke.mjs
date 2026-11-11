@@ -722,6 +722,24 @@ console.log('\n14. 默认后台启动（不用加 -d）')
   const state = JSON.parse(await readFile(stateFile, 'utf8'))
   check('状态里标记为后台运行', state.daemon === true)
   check('状态里依然没有明文密码', !JSON.stringify(state).includes(PASSWORD))
+
+  // 重复启动：必须被拒绝，而且不能把正在跑那个实例的状态文件删掉
+  const cleanEnv = {
+    INVOCATION_ID: undefined,
+    NOTIFY_SOCKET: undefined,
+    OHMY_CONTAINER: undefined,
+    OHMY_FOREGROUND: undefined,
+  }
+  const startedPid = Number(/pid=(\d+)/.exec(started.stdout)?.[1] || 0)
+  const dup = await runCmd(args, cleanEnv)
+  check('同端口重复启动会被拒绝', dup.code !== 0, `exit=${dup.code}`)
+  check('原实例的状态文件还在', existsSync(stateFile))
+  const stAfter = await runCmd(['status'], cleanEnv)
+  check(
+    'status 仍能看到原实例',
+    startedPid > 0 && stAfter.stdout.includes(`pid=${startedPid}`),
+    stAfter.stdout.split('\n')[2] || '',
+  )
   check('后台服务在监听', (await fetch(`http://127.0.0.1:${port}/healthz`)).status === 200)
 
   // 前台模式：命令不返回，直到被停掉

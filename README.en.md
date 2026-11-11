@@ -158,6 +158,17 @@ Notes:
 - Repeated failures are locked per path; clear them from Accounts → Current locks / failures.
 - To stop protecting a path, delete the binding and re-add it without the automatic password; without a password it follows the main auth.
 
+## New version notices
+
+When a new version is out, the **admin pages show a banner** at the top (current → latest, the upgrade
+command and a release-notes link), plus a “Check for updates” link to refresh it. Results are cached in
+`~/.oh-my-http/update-check.json`:
+
+- checked once at startup (printed by `-f`, written to the log when running as a daemon)
+- if the cache is older than 24h, or an admin opens the panel and nothing has been checked yet, it
+  re-checks in the background (at most once every 10 minutes)
+- opt out with `--no-update-check`, `OHMY_NO_UPDATE_CHECK=1`, `NO_UPDATE_NOTIFIER=1` or `CI=true`
+
 ## UI language
 
 The top-right corner of the admin pages switches **中文 / English**; the choice is stored in the account file and applies immediately (including the login page).
