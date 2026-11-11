@@ -5,7 +5,7 @@ import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { MIN_PASSWORD, createAccountStore } from '../lib/accounts.js'
-import { loadConfig, USAGE } from '../lib/config.js'
+import { DEFAULT_PORT, loadConfig, USAGE } from '../lib/config.js'
 import {
   COMMANDS,
   DEFAULT_STATE_DIR,
@@ -25,6 +25,7 @@ import {
   waitForState,
   writeState,
 } from '../lib/runtime.js'
+import { installService, servicePlatform, serviceStatus, uninstallService } from '../lib/service.js'
 import {
   createServer,
   explainAccess,
@@ -166,6 +167,124 @@ function printState(state) {
   console.log(`  工作目录: ${state.cwd}`)
   if (state.daemon) console.log(`  日志    : ${logFileFor(state.port, state.stateDir)}`)
   return status
+}
+
+const SERVICE_USAGE = `${BANNER}
+
+用法: ${NAME} service install [--port <n>] [--state-dir <dir>] [启动参数…]
+      ${NAME} service status  [--port <n>]
+      ${NAME} service uninstall [--port <n>]
+
+  install    装成登录自启服务并立即启动：
+               macOS → ~/Library/LaunchAgents/cn.xs25.oh-my-http.<port>.plist（launchd）
+               Linux → ~/.config/systemd/user/oh-my-http-<port>.service（systemd --user）
+  status     看服务是否已安装 / 正在运行
+  uninstall  停止并删除服务定义
+
+  说明:
+    - 用户级服务：登录后自动启动；异常退出会被自动拉起（KeepAlive / Restart=always）
+    - 想要「开机不登录也启动」需要 root 级 LaunchDaemon / systemd system 服务，请自行加 sudo 配置
+    - 服务里跑的是前台进程，日志写到 <state-dir>/service-<port>.log
+    - 已经手动起过同端口的实例时先 ${NAME} stop --port <port>，否则会抢端口失败
+
+示例:
+  ${NAME} service install ~/Desktop/映客活动数据 --port 25250 --pass s3cret
+  ${NAME} service status
+  ${NAME} service uninstall --port 25250`
+
+/** 「开机自启」子命令：把当前参数写成 launchd / systemd 用户级服务。 */
+async function runService(args) {
+  const action = ['install', 'uninstall', 'status'].includes(args[0]) ? args[0] : null
+  if (!action || args.includes('-h') || args.includes('--help')) {
+    console.log(SERVICE_USAGE)
+    return
+  }
+
+  // 从剩下的参数里挑出 --port / --state-dir，其余原样作为启动参数
+  const startArgs = []
+  let port = DEFAULT_PORT
+  let stateDir = DEFAULT_STATE_DIR
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--port' || arg === '-p') {
+      port = Number(args[++i])
+      continue
+    }
+    if (arg.startsWith('--port=')) {
+      port = Number(arg.slice('--port='.length))
+      continue
+    }
+    if (arg === '--state-dir') {
+      stateDir = args[++i]
+      continue
+    }
+    if (arg.startsWith('--state-dir=')) {
+      stateDir = arg.slice('--state-dir='.length)
+      continue
+    }
+    startArgs.push(arg)
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error(`${NAME}: 无效端口: ${port}`)
+    process.exitCode = 2
+    return
+  }
+
+  const options = {
+    port,
+    stateDir: path.resolve(stateDir),
+    args: startArgs,
+    binPath: fileURLToPath(import.meta.url),
+    cwd: process.cwd(),
+  }
+
+  if (servicePlatform() === 'unsupported') {
+    console.error(`${NAME}: 当前平台（${process.platform}）暂不支持 service 子命令`)
+    console.error('  macOS 请手动配置 launchd，Linux 请手动配置 systemd --user，Windows 可用「任务计划程序」')
+    process.exitCode = 2
+    return
+  }
+
+  if (action === 'install') {
+    const running = readState(stateFileFor(port, options.stateDir))
+    if (running && stateStatus(running) === 'running') {
+      console.log(`  提示: :${port} 现在有一个手动启动的实例（pid=${running.pid}），先停掉它免得抢端口：`)
+      console.log(`        ${NAME} stop --port ${port}`)
+      console.log('')
+    }
+    const result = installService(options)
+    const failed = result.steps.filter((step) => !step.ok)
+    console.log(`${result.kind === 'launchd' ? 'LaunchAgent' : 'systemd user unit'} 已安装`)
+    console.log(`  文件: ${result.file}`)
+    console.log(`  日志: ${result.logFile}`)
+    console.log(`  端口: ${port}`)
+    if (failed.length) {
+      console.error('  启动命令有报错:')
+      for (const step of failed) console.error(`    ${step.cmd} ${step.args.join(' ')} → ${step.error}`)
+      process.exitCode = 1
+      return
+    }
+    console.log('  状态: 已启动，登录后会自动运行（异常退出会自动拉起）')
+    if (result.kind === 'launchd') {
+      console.log(`  卸载: ${NAME} service uninstall --port ${port}`)
+    } else {
+      console.log(`  想让它在没登录时也启动，可执行: sudo loginctl enable-linger $USER`)
+    }
+    return
+  }
+
+  if (action === 'uninstall') {
+    const result = uninstallService(options)
+    console.log(`已停止并移除 ${result.kind === 'launchd' ? 'LaunchAgent' : 'systemd user unit'}`)
+    if (result.file) console.log(`  文件: ${result.file}（已删除）`)
+    return
+  }
+
+  const status = serviceStatus(options)
+  console.log(`${status.kind === 'launchd' ? 'LaunchAgent' : 'systemd user unit'} 状态`)
+  console.log(`  已安装: ${status.installed ? '是' : '否'}`)
+  console.log(`  文件  : ${status.file}`)
+  console.log(`  运行中: ${status.active ? '是' : '否'}`)
 }
 
 async function runCommand(cmd, args) {
@@ -380,10 +499,14 @@ async function startDaemon(argv, cfg) {
 async function main() {
   const rawArgv = process.argv.slice(2)
 
-  // 子命令（stop / status / restart / start）
+  // 子命令（stop / status / restart / start / service）
   const cmd = rawArgv[0] && COMMANDS.includes(rawArgv[0]) ? rawArgv[0] : null
   if (cmd === 'stop' || cmd === 'status' || cmd === 'restart') {
     await runCommand(cmd, rawArgv.slice(1))
+    return
+  }
+  if (cmd === 'service') {
+    await runService(rawArgv.slice(1))
     return
   }
   const argv = cmd === 'start' ? rawArgv.slice(1) : rawArgv

@@ -82,6 +82,26 @@ tail -f ~/.oh-my-http/log-25250.log
 - `restart` reuses the saved arguments; passwords are not written to disk, accounts live in the account file.
 - State, logs and accounts live in `~/.oh-my-http/` (override with `--state-dir`).
 
+## Start on login
+
+Install it as a **user-level service** (macOS LaunchAgent / Linux systemd --user): it starts when you log in
+and is restarted if it dies.
+
+```bash
+# the directory and flags are written into the service definition as-is
+oh-my-http service install ~/Downloads --port 25250 --pass s3cret
+
+oh-my-http service status        # installed? running?
+oh-my-http service uninstall     # stop and remove
+```
+
+- macOS → `~/Library/LaunchAgents/cn.xs25.oh-my-http.25250.plist` (`RunAtLoad` + `KeepAlive`)
+- Linux → `~/.config/systemd/user/oh-my-http-25250.service` (`Restart=always`)
+- The service runs in the **foreground**; logs go to `~/.oh-my-http/service-25250.log`
+- Run `oh-my-http stop --port 25250` first, otherwise a manually started instance holds the port
+- User-level services start after login. To run **before login**, use a root LaunchDaemon / systemd system unit
+  (on Linux `sudo loginctl enable-linger $USER` also keeps user services alive without a login)
+
 ## Auth and accounts
 
 | Mode | Behaviour |

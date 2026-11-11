@@ -1,5 +1,15 @@
 # 更新日志
 
+## 未发布
+
+### 开机自启
+
+- 新增 `service` 子命令：`install` / `status` / `uninstall`。
+- macOS 生成 `~/Library/LaunchAgents/cn.xs25.oh-my-http.<port>.plist`（`RunAtLoad` + `KeepAlive`）；
+  Linux 生成 `~/.config/systemd/user/oh-my-http-<port>.service`（`Restart=always`）。
+- 服务以 `--foreground` 运行，日志写 `<state-dir>/service-<port>.log`；安装前会提示先停掉同端口的手动实例。
+- 新增 `lib/service.js`（`serviceSpec` 纯函数便于测试）与 6 组单测。
+
 ## 0.3.1
 
 ### 修复

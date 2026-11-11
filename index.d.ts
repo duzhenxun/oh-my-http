@@ -537,6 +537,72 @@ export function hashScrypt(password: string): { algo: 'scrypt'; salt: string; ha
 export function verifyHashed(record: { algo?: string; salt?: string; hash: string }, password: string): boolean
 
 // ---------------------------------------------------------------------------
+// 开机自启（launchd / systemd --user）
+// ---------------------------------------------------------------------------
+
+export type ServiceKind = 'launchd' | 'systemd' | 'unsupported'
+
+/** 当前平台用哪种服务管理器。 */
+export function servicePlatform(platform?: string): ServiceKind
+/** LaunchAgent 的 label（按端口区分），如 cn.xs25.oh-my-http.25250 */
+export function serviceLabel(port: number): string
+/** systemd user unit 文件名，如 oh-my-http-25250.service */
+export function systemdUnitName(port: number): string
+/** 服务定义文件路径；不支持的平台返回 null。 */
+export function serviceFilePath(
+  port: number,
+  options?: { platform?: string; home?: string },
+): string | null
+/** LaunchAgent plist 内容。 */
+export function launchdPlist(options: {
+  nodePath: string
+  binPath: string
+  args: string[]
+  port: number
+  cwd: string
+  logFile: string
+}): string
+/** systemd user unit 内容。 */
+export function systemdUnit(options: {
+  nodePath: string
+  binPath: string
+  args: string[]
+  port: number
+  cwd: string
+}): string
+export interface ServiceSpec {
+  kind: ServiceKind
+  label: string
+  file: string | null
+  logFile?: string
+  content: string
+  commands: { install: [string, string[]][]; uninstall: [string, string[]][]; status: [string, string[]][] } | null
+}
+/** 生成服务定义（纯函数，不碰系统）。 */
+export function serviceSpec(options: {
+  platform?: string
+  home?: string
+  port: number
+  args: string[]
+  nodePath?: string
+  binPath: string
+  cwd?: string
+  stateDir: string
+}): ServiceSpec
+export function installService(
+  options: Parameters<typeof serviceSpec>[0],
+  io?: { exec?: (cmd: string, args: string[], options?: object) => unknown },
+): { ok: boolean; kind: ServiceKind; file: string | null; logFile?: string; steps: object[]; error?: string }
+export function uninstallService(
+  options: Parameters<typeof serviceSpec>[0],
+  io?: { exec?: (cmd: string, args: string[], options?: object) => unknown },
+): { ok: boolean; kind: ServiceKind; file: string | null; steps: object[]; error?: string }
+export function serviceStatus(
+  options: Parameters<typeof serviceSpec>[0],
+  io?: { exec?: (cmd: string, args: string[], options?: object) => unknown },
+): { ok: boolean; kind: ServiceKind; file?: string | null; installed: boolean; active: boolean }
+
+// ---------------------------------------------------------------------------
 // 新版本检查
 // ---------------------------------------------------------------------------
 

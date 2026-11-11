@@ -82,6 +82,25 @@ tail -f ~/.oh-my-http/log-25250.log
 - `restart` 用的是上次保存的启动参数；密码不会落盘，靠账号文件保持。
 - 状态 / 日志 / 账号文件都在 `~/.oh-my-http/`（可用 `--state-dir` 改）。
 
+## 开机自启
+
+一条命令装成**用户级服务**（macOS LaunchAgent / Linux systemd --user）：登录后自动启动，进程挂了自动拉起。
+
+```bash
+# 把「目录 + 启动参数」原样写进服务定义，装完立即启动
+oh-my-http service install ~/Downloads --port 25250 --pass s3cret
+
+oh-my-http service status        # 装没装、在不在跑
+oh-my-http service uninstall     # 停止并删除服务定义
+```
+
+- macOS → `~/Library/LaunchAgents/cn.xs25.oh-my-http.25250.plist`（`RunAtLoad` + `KeepAlive`）
+- Linux → `~/.config/systemd/user/oh-my-http-25250.service`（`Restart=always`）
+- 服务里跑的是**前台**进程，日志写到 `~/.oh-my-http/service-25250.log`
+- 装之前先 `oh-my-http stop --port 25250`（否则手动实例占着端口，服务起不来）
+- 用户级服务是「登录后」启动；要**开机不登录也跑**，得用 root 级 LaunchDaemon / systemd system 服务
+  （Linux 可加 `sudo loginctl enable-linger $USER` 让 user 服务不依赖登录）
+
 ## 认证与账号
 
 | 方式 | 说明 |
