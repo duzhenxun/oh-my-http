@@ -74,6 +74,7 @@ oh-my-http --no-files
 oh-my-http status                  # 看所有实例（PID / 端口 / 目录 / 已运行时长）
 oh-my-http stop                    # 停止（多实例时加 --port）
 oh-my-http restart --port 25250    # 按上次的参数重启
+oh-my-http reload --port 25250     # 不重启，重新读账号 / 语言 / 锁定策略 / 目录绑定
 oh-my-http . --foreground          # 前台运行（docker / systemd / 调试）
 tail -f ~/.oh-my-http/log-25250.log
 ```
@@ -81,6 +82,8 @@ tail -f ~/.oh-my-http/log-25250.log
 - 默认后台；容器（PID 1）与 systemd 环境自动切前台。
 - `restart` 用的是上次保存的启动参数；密码不会落盘，靠账号文件保持。
 - 状态 / 日志 / 账号文件都在 `~/.oh-my-http/`（可用 `--state-dir` 改）。
+- `reload` 只是给进程发 `SIGHUP`：手改过 `users.json`（加账号、改绑定、换语言）后不必重启，
+  连接不会被断开；账号文件写坏了会拒绝加载、继续用旧配置（日志里会有原因）。
 
 ## 开机自启
 

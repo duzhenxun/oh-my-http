@@ -742,6 +742,25 @@ console.log('\n14. 默认后台启动（不用加 -d）')
   )
   check('后台服务在监听', (await fetch(`http://127.0.0.1:${port}/healthz`)).status === 200)
 
+  // reload：改账号文件里的绑定，SIGHUP 后立即生效（不重启）
+  const usersJson = JSON.parse(await readFile(USERS_FILE, 'utf8'))
+  usersJson.settings = {
+    ...(usersJson.settings || {}),
+    mounts: [{ mount: '/hot', root: path.join(workdir, 'docs') }],
+  }
+  await writeFile(USERS_FILE, JSON.stringify(usersJson, null, 2))
+  const reloaded = await runCmd(['reload', '--port', String(port)], cleanEnv)
+  check('reload 命令可用', reloaded.code === 0, `exit=${reloaded.code} ${reloaded.stderr.trim()}`)
+  check('reload 提示已通知实例', /已通知/.test(reloaded.stdout))
+  await new Promise((r) => setTimeout(r, 300))
+  const stillUp = await fetch(`http://127.0.0.1:${port}/healthz`)
+  check('reload 之后实例还活着', stillUp.status === 200, `status=${stillUp.status}`)
+  const hotRes = await fetch(`http://127.0.0.1:${port}/hot/report.txt`, {
+    headers: { authorization: `Basic ${Buffer.from(`admin:${PASSWORD}`).toString('base64')}` },
+  })
+  check('reload 后新绑定立即生效', hotRes.status === 200, `status=${hotRes.status}`)
+  check('reload 后内容正确', (await hotRes.text()).includes('quarterly'))
+
   // 前台模式：命令不返回，直到被停掉
   const port2 = await freePort()
   const fg = spawn(process.execPath, [bin, ...args.slice(0, -4), '--port', String(port2), '--foreground', '--users-file', USERS_FILE], {

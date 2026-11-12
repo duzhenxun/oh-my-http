@@ -42,6 +42,8 @@ const BIN = fileURLToPath(import.meta.url)
 function formatLog(entry) {
   if (entry.level === 'warn') return `! ${entry.time} 警告 ${entry.message}`
   if (entry.error) return `! ${entry.time} error path=${entry.path} ${entry.error}`
+  // 非访问日志（例如 reload 的提示）：只有 message
+  if (typeof entry.durationMs !== 'number') return `${entry.time} ${entry.message || ''}`.trim()
   const ms = `${entry.durationMs.toFixed(0)}ms`
   const via = entry.viaProxy ? ` proxy->${entry.peer}` : ''
   return [
@@ -113,6 +115,9 @@ const COMMAND_USAGE = `用法:
   ${NAME} status [--port <n>] [--state-dir <dir>]
   ${NAME} stop [--port <n>] [--force] [--state-dir <dir>]
   ${NAME} restart [--port <n>] [--force] [--state-dir <dir>]
+  ${NAME} reload [--port <n>] [--state-dir <dir>]
+
+reload 只是给进程发 SIGHUP：不重启、不断连接，重新读账号文件里的账号 / 语言 / 锁定策略 / 目录绑定。
 
 不带 --port 时：只有一个实例就直接用它，多个实例会列出来让你指定。`
 
@@ -341,6 +346,57 @@ async function runCommand(cmd, args) {
     return
   }
 
+  // reload：给运行中的实例发 SIGHUP，让它重新读账号文件（账号 / 语言 / 锁定策略 / 目录绑定）
+  if (cmd === 'reload') {
+    let target
+    if (port) {
+      target = readState(stateFileFor(port, dir))
+      if (!target) {
+        console.error(`${NAME}: 没有找到 :${port} 的运行记录（状态目录 ${dir}）`)
+        process.exitCode = 1
+        return
+      }
+      target = { ...target, stateDir: dir }
+    } else {
+      const states = listStates(dir).map((s) => ({ ...s, stateDir: dir }))
+      const picked = resolveTarget(states, null)
+      if (picked.error) {
+        if (picked.multiple) {
+          console.error(`${NAME}: ${picked.error}\n`)
+          for (const s of states) console.error(`  ${oneLine(s)}  ${s.root || ''}`)
+        } else {
+          console.error(`${NAME}: ${picked.error}`)
+        }
+        process.exitCode = 1
+        return
+      }
+      target = picked.state
+    }
+
+    const status = stateStatus(target)
+    if (status === 'dead') {
+      removeState(stateFileFor(target.port, dir))
+      console.error(`${NAME}: :${target.port} 的进程（pid=${target.pid}）已经不在了`)
+      process.exitCode = 1
+      return
+    }
+    if (status === 'reused') {
+      console.error(`${NAME}: 记录的 PID ${target.pid} 现在不是 oh-my-http 进程，出于安全不操作它。`)
+      process.exitCode = 1
+      return
+    }
+    try {
+      process.kill(target.pid, 'SIGHUP')
+    } catch (err) {
+      console.error(`${NAME}: 给 pid=${target.pid} 发 SIGHUP 失败: ${err.message}`)
+      process.exitCode = 1
+      return
+    }
+    console.log(`已通知 :${target.port} 重新加载账号 / 语言 / 锁定策略 / 目录绑定（pid=${target.pid}）`)
+    console.log(`  查看结果: tail -f ${logFileFor(target.port, dir)}`)
+    return
+  }
+
   // stop / restart
   let target
   if (port) {
@@ -510,7 +566,7 @@ async function main() {
 
   // 子命令（stop / status / restart / start / service）
   const cmd = rawArgv[0] && COMMANDS.includes(rawArgv[0]) ? rawArgv[0] : null
-  if (cmd === 'stop' || cmd === 'status' || cmd === 'restart') {
+  if (cmd === 'stop' || cmd === 'status' || cmd === 'restart' || cmd === 'reload') {
     await runCommand(cmd, rawArgv.slice(1))
     return
   }

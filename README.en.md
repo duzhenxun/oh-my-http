@@ -74,6 +74,7 @@ It daemonizes by default: the command returns immediately and prints the port, d
 oh-my-http status                  # all instances (PID / port / directory / uptime)
 oh-my-http stop                    # stop (add --port when several run)
 oh-my-http restart --port 25250    # restart with the previous arguments
+oh-my-http reload --port 25250     # reload accounts / language / lockout / bindings without restarting
 oh-my-http . --foreground          # run in the foreground (docker / systemd / debugging)
 tail -f ~/.oh-my-http/log-25250.log
 ```
@@ -81,6 +82,9 @@ tail -f ~/.oh-my-http/log-25250.log
 - Background by default; containers (PID 1) and systemd environments switch to foreground automatically.
 - `restart` reuses the saved arguments; passwords are not written to disk, accounts live in the account file.
 - State, logs and accounts live in `~/.oh-my-http/` (override with `--state-dir`).
+- `reload` just sends `SIGHUP`: after editing `users.json` by hand (new account, changed bindings, another
+  language) there is no need to restart and connections stay open. A broken file is rejected and the old
+  configuration keeps running (the reason is logged).
 
 ## Start on login
 
