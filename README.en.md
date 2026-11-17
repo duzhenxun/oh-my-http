@@ -75,6 +75,9 @@ oh-my-http status                  # all instances (PID / port / directory / upt
 oh-my-http stop                    # stop (add --port when several run)
 oh-my-http restart --port 25250    # restart with the previous arguments
 oh-my-http reload --port 25250     # reload accounts / language / lockout / bindings without restarting
+oh-my-http stop --all              # stop every instance on this machine
+oh-my-http stop --port 25250       # also works when the state file is gone (finds the process via the port)
+oh-my-http upgrade                 # check npm and upgrade in place (--check = dry run, --restart = restart after)
 oh-my-http . --foreground          # run in the foreground (docker / systemd / debugging)
 tail -f ~/.oh-my-http/log-25250.log
 ```

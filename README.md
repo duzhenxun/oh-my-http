@@ -75,6 +75,9 @@ oh-my-http status                  # 看所有实例（PID / 端口 / 目录 / �
 oh-my-http stop                    # 停止（多实例时加 --port）
 oh-my-http restart --port 25250    # 按上次的参数重启
 oh-my-http reload --port 25250     # 不重启，重新读账号 / 语言 / 锁定策略 / 目录绑定
+oh-my-http stop --all              # 停掉这台机器上所有实例
+oh-my-http stop --port 25250       # 状态文件丢了也能按端口找到残留进程并停掉
+oh-my-http upgrade                 # 查 npm 最新版并自动升级（--check 只看不装，--restart 装完重启）
 oh-my-http . --foreground          # 前台运行（docker / systemd / 调试）
 tail -f ~/.oh-my-http/log-25250.log
 ```

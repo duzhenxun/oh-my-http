@@ -2,6 +2,16 @@
 
 ## 未发布
 
+### 批量停止与自动升级
+
+- `stop` / `restart` / `reload` 支持 `--all`：一次处理状态目录里的所有实例（`oh-my-http stop --all`）。
+- 新增 `oh-my-http upgrade`：查 npm 最新版并执行 `npm i -g oh-my-http@<version>`；
+  `--check` 只看不装、`--force` 强制重装、`--version <v>` 指定版本、`--restart` 装完重启所有实例。
+- 启动前增加端口预检：没有状态文件但端口确实被占用时（例如被环境重启过的旧实例），
+  给出 `lsof` 排查提示，而不是只报 EADDRINUSE。
+- `stop` 现在能收拾残留：状态文件丢了也会用 `lsof` 按端口找到 oh-my-http 进程并停掉；
+  端口被别的程序占用时只警告、不动手（`--force` 也不越权杀别人）。
+
 ### 热加载：`oh-my-http reload`
 
 - 新增 `reload` 子命令：给运行中的实例发 `SIGHUP`，重新读取账号文件里的**账号、界面语言、锁定策略、目录绑定**，

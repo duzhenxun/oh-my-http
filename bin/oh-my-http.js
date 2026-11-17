@@ -1,17 +1,21 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import net from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { MIN_PASSWORD, createAccountStore } from '../lib/accounts.js'
 import { DEFAULT_PORT, loadConfig, USAGE } from '../lib/config.js'
+import { DEFAULT_REGISTRY, compareVersions, fetchLatestVersion } from '../lib/update.js'
 import {
   COMMANDS,
   DEFAULT_STATE_DIR,
   humanDuration,
+  listenerPids,
   listStates,
   logFileFor,
+  looksLikeOurs,
   openLog,
   readState,
   redactArgv,
@@ -34,10 +38,24 @@ import {
   localAdminAccount,
   withAuthState,
 } from '../lib/server.js'
-import { checkForUpdate, compareVersions, readUpdateCache, updateCacheFile, upgradeHint } from '../lib/update.js'
+import { checkForUpdate, readUpdateCache, updateCacheFile, upgradeHint } from '../lib/update.js'
 import { BANNER, NAME, VERSION } from '../lib/version.js'
 
 const BIN = fileURLToPath(import.meta.url)
+
+/** 端口上有没有人在监听（用来区分「状态文件丢了」和「真的没人」）。 */
+function portInUse(port, host = '127.0.0.1', timeoutMs = 600) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ port, host })
+    const done = (value) => {
+      sock.destroy()
+      resolve(value)
+    }
+    sock.setTimeout(timeoutMs, () => done(false))
+    sock.once('connect', () => done(true))
+    sock.once('error', () => done(false))
+  })
+}
 
 function formatLog(entry) {
   if (entry.level === 'warn') return `! ${entry.time} 警告 ${entry.message}`
@@ -107,15 +125,38 @@ function printAccessCheck(cfg) {
 const COMMAND_OPTIONS = {
   port: { type: 'string' },
   'state-dir': { type: 'string' },
+  all: { type: 'boolean' },
   force: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 }
 
+const UPGRADE_OPTIONS = {
+  check: { type: 'boolean' },
+  force: { type: 'boolean' },
+  version: { type: 'string' },
+  registry: { type: 'string' },
+  restart: { type: 'boolean' },
+  'state-dir': { type: 'string' },
+  help: { type: 'boolean', short: 'h' },
+}
+
+const UPGRADE_USAGE = `用法:
+  ${NAME} upgrade [--check] [--force] [--version <v>] [--restart] [--registry <url>]
+
+  --check          只查有没有新版本，不安装
+  --force          已经是最新也重新装一次
+  --version <v>    装指定版本（默认装 npm 上的 latest）
+  --restart        装完自动重启所有在跑的实例
+  --registry <url> 用别的 registry（默认 ${DEFAULT_REGISTRY}）
+
+相当于帮你跑：npm i -g ${NAME}@latest`
+
 const COMMAND_USAGE = `用法:
   ${NAME} status [--port <n>] [--state-dir <dir>]
-  ${NAME} stop [--port <n>] [--force] [--state-dir <dir>]
-  ${NAME} restart [--port <n>] [--force] [--state-dir <dir>]
-  ${NAME} reload [--port <n>] [--state-dir <dir>]
+  ${NAME} stop [--port <n>] [--all] [--force] [--state-dir <dir>]
+  ${NAME} restart [--port <n>] [--all] [--force] [--state-dir <dir>]
+  ${NAME} reload [--port <n>] [--all] [--state-dir <dir>]
+  ${NAME} upgrade [--check] [--force] [--version <v>] [--restart]
 
 reload 只是给进程发 SIGHUP：不重启、不断连接，重新读账号文件里的账号 / 语言 / 锁定策略 / 目录绑定。
 
@@ -172,6 +213,81 @@ function printState(state) {
   console.log(`  工作目录: ${state.cwd}`)
   if (state.daemon) console.log(`  日志    : ${logFileFor(state.port, state.stateDir)}`)
   return status
+}
+
+/** `upgrade`：查 npm 最新版并帮你 `npm i -g`，可选自动重启在跑的实例。 */
+async function runUpgrade(args) {
+  let values
+  try {
+    values = parseArgs({ args, options: UPGRADE_OPTIONS, allowPositionals: false, strict: true }).values
+  } catch (err) {
+    console.error(`${NAME}: ${err.message}\n`)
+    console.error(UPGRADE_USAGE)
+    process.exitCode = 2
+    return
+  }
+  if (values.help) {
+    console.log(UPGRADE_USAGE)
+    return
+  }
+
+  const registry =
+    values.registry || process.env.OHMY_REGISTRY || process.env.npm_config_registry || DEFAULT_REGISTRY
+  const current = VERSION
+  let target = values.version ? String(values.version).replace(/^v/, '') : null
+
+  if (!target) {
+    try {
+      target = await fetchLatestVersion({ name: NAME, registry, timeoutMs: 5000 })
+    } catch (err) {
+      console.error(`${NAME}: 查询最新版本失败: ${err.message}`)
+      console.error(`  可以手动升级：npm i -g ${NAME}@latest`)
+      process.exitCode = 1
+      return
+    }
+  }
+  if (!target) {
+    console.error(`${NAME}: 没能拿到最新版本号，可以手动：npm i -g ${NAME}@latest`)
+    process.exitCode = 1
+    return
+  }
+
+  const newer = compareVersions(target, current) > 0
+  if (values.check) {
+    if (newer) {
+      console.log(`有新版本可用：${current} → ${target}`)
+      console.log(`升级：${NAME} upgrade${values.restart ? ' --restart' : ''}`)
+    } else {
+      console.log(`已经是最新版本（${current}）`)
+    }
+    return
+  }
+  if (!newer && !values.force) {
+    console.log(`已经是最新版本（${current}）`)
+    console.log(`  想强制重装：${NAME} upgrade --force`)
+    return
+  }
+
+  const spec = `${NAME}@${values.force && !newer ? 'latest' : target}`
+  console.log(`正在安装 ${spec}（registry: ${registry}）…`)
+  const result = spawnSync('npm', ['i', '-g', spec, '--registry', registry], { stdio: 'inherit' })
+  if (result.error || result.status !== 0) {
+    console.error('')
+    console.error(`${NAME}: 安装失败${result.error ? `: ${result.error.message}` : ''}`)
+    console.error(`  手动试一次：npm i -g ${spec}`)
+    console.error('  如果提示 EACCES/权限不足，可能要用 sudo，或改用 nvm 管理的 Node')
+    process.exitCode = result.status || 1
+    return
+  }
+
+  console.log('')
+  console.log(`已升级：${current} → ${spec}`)
+  if (values.restart) {
+    console.log('正在重启所有实例…')
+    await runCommand('restart', ['--all', '--state-dir', values['state-dir'] || DEFAULT_STATE_DIR])
+  } else {
+    console.log(`重启后生效：${NAME} restart --all`)
+  }
 }
 
 const SERVICE_USAGE = `${BANNER}
@@ -292,6 +408,20 @@ async function runService(args) {
   console.log(`  运行中: ${status.active ? '是' : '否'}`)
 }
 
+/**
+ * 状态文件丢了，但端口上还有实例：按端口找到 oh-my-http 进程并停掉。
+ * 非本程序的进程只报告、不动手。
+ */
+async function stopOrphanOnPort(port, { force = false } = {}) {
+  const pids = listenerPids(port)
+  if (pids.length === 0) return { ok: false, reason: 'free' }
+  const ours = pids.filter((pid) => looksLikeOurs(pid))
+  if (ours.length === 0) return { ok: false, reason: 'foreign', pids }
+  const results = []
+  for (const pid of ours) results.push(await stopProcess(pid, { force }))
+  return { ok: results.every((r) => r.ok), reason: 'stopped', pids: ours, results }
+}
+
 async function runCommand(cmd, args) {
   let values
   try {
@@ -317,6 +447,29 @@ async function runCommand(cmd, args) {
 
   const dir = path.resolve(values['state-dir'] || process.env.OHMY_STATE_DIR || DEFAULT_STATE_DIR)
   const port = values.port !== undefined ? Number(values.port) : null
+
+  // --all：对状态目录里的每个实例逐个执行（内部带 --port 再调自己，复用同一套逻辑）
+  if (values.all) {
+    if (port) {
+      console.error(`${NAME}: --all 与 --port 不能一起用`)
+      process.exitCode = 2
+      return
+    }
+    const states = listStates(dir)
+    if (states.length === 0) {
+      console.error(`${NAME}: 没有运行中的实例（状态目录 ${dir}）`)
+      if (cmd === 'stop') {
+        console.error('  如果知道端口，可以按端口清理残留进程：oh-my-http stop --port <n>')
+      }
+      process.exitCode = 1
+      return
+    }
+    for (const s of states) {
+      const extra = values.force ? ['--force'] : []
+      await runCommand(cmd, ['--port', String(s.port), '--state-dir', dir, ...extra])
+    }
+    return
+  }
 
   if (cmd === 'status') {
     if (port) {
@@ -402,6 +555,21 @@ async function runCommand(cmd, args) {
   if (port) {
     target = readState(stateFileFor(port, dir))
     if (!target) {
+      if (cmd === 'stop') {
+        const orphan = await stopOrphanOnPort(port, { force: Boolean(values.force) })
+        if (orphan.reason === 'stopped') {
+          console.log(
+            `没有状态文件，但 :${port} 上有 oh-my-http 进程（pid=${orphan.pids.join(', ')}），已停止。`,
+          )
+          return
+        }
+        if (orphan.reason === 'foreign') {
+          console.error(`${NAME}: :${port} 被其它程序占用（pid=${orphan.pids.join(', ')}），不是 oh-my-http，未做处理。`)
+          console.error(`  看是谁：lsof -nP -iTCP:${port} -sTCP:LISTEN`)
+          process.exitCode = 1
+          return
+        }
+      }
       console.error(`${NAME}: 没有找到 :${port} 的运行记录（状态目录 ${dir}）`)
       process.exitCode = 1
       return
@@ -430,7 +598,15 @@ async function runCommand(cmd, args) {
   if (status === 'dead') {
     console.log(`:${target.port} 的进程（pid=${target.pid}）已经不在了，清理掉旧记录。`)
     removeState(stateFile)
-    if (cmd === 'stop') return
+    if (cmd === 'stop') {
+      const orphan = await stopOrphanOnPort(target.port, { force: Boolean(values.force) })
+      if (orphan.reason === 'stopped') {
+        console.log(`端口上还有一个残留进程（pid=${orphan.pids.join(', ')}），已停止。`)
+      } else if (orphan.reason === 'foreign') {
+        console.error(`${NAME}: :${target.port} 现在被其它程序占用（pid=${orphan.pids.join(', ')}），未做处理。`)
+      }
+      return
+    }
   }
   if (status === 'reused') {
     console.error(`${NAME}: 记录的 PID ${target.pid} 现在不是 oh-my-http 进程，出于安全不操作它。`)
@@ -520,6 +696,15 @@ async function startDaemon(argv, cfg) {
     process.exitCode = 1
     return
   }
+  // 没有状态文件，但端口确实有东西在听：多半是被环境重启过的旧实例，提示怎么处理
+  const probeHost = cfg.host === '0.0.0.0' || cfg.host === '::' ? '127.0.0.1' : cfg.host
+  if (await portInUse(cfg.port, probeHost)) {
+    console.error(`${NAME}: :${cfg.port} 端口已被占用（可能是一个没有状态文件的旧实例）`)
+    console.error(`  看是谁：lsof -nP -iTCP:${cfg.port} -sTCP:LISTEN`)
+    console.error(`  确认后 kill 掉它，或者换个端口：${NAME} <目录> --port <n>`)
+    process.exitCode = 1
+    return
+  }
   removeState(stateFile)
 
   const child = spawn(process.execPath, [BIN, ...stripDaemon(argv)], {
@@ -566,6 +751,10 @@ async function main() {
 
   // 子命令（stop / status / restart / start / service）
   const cmd = rawArgv[0] && COMMANDS.includes(rawArgv[0]) ? rawArgv[0] : null
+  if (cmd === 'upgrade') {
+    await runUpgrade(rawArgv.slice(1))
+    return
+  }
   if (cmd === 'stop' || cmd === 'status' || cmd === 'restart' || cmd === 'reload') {
     await runCommand(cmd, rawArgv.slice(1))
     return

@@ -779,8 +779,23 @@ console.log('\n14. 默认后台启动（不用加 -d）')
   await new Promise((r) => setTimeout(r, 400))
   check('--foreground 收到 SIGTERM 会退出', fgExited)
 
-  await runCmd(['stop', '--port', String(port)])
-  check('stop 收尾干净', !existsSync(stateFile))
+  const stopAll = await runCmd(['stop', '--all'], cleanEnv)
+  check('stop --all 可用', stopAll.code === 0, `exit=${stopAll.code}`)
+  check('stop --all 收尾干净', !existsSync(stateFile))
+
+  // 状态文件丢了（比如被环境重启过），stop 仍要能按端口找到并停掉残留进程
+  const again2 = await runCmd(args, cleanEnv)
+  check('（准备）再次后台启动成功', again2.code === 0, `exit=${again2.code} ${again2.stderr.trim()}`)
+  const orphanPid = Number(/pid=(\d+)/.exec(again2.stdout)?.[1] || 0)
+  await rm(stateFile, { force: true })
+  const orphanStop = await runCmd(['stop', '--port', String(port)], cleanEnv)
+  check(
+    '状态文件丢了也能按端口 stop',
+    orphanStop.code === 0 && /没有状态文件/.test(orphanStop.stdout),
+    orphanStop.stdout.trim() || orphanStop.stderr.trim(),
+  )
+  await new Promise((r) => setTimeout(r, 500))
+  check('残留进程已被停掉', orphanPid > 0 && !isAlive(orphanPid), `pid=${orphanPid}`)
 }
 
 console.log('\n15. 后台管理页：登录保护设置 + 锁定列表 + 改密码解锁')
@@ -991,6 +1006,11 @@ console.log('\n17. 新版本提示（不阻塞启动、带缓存、可关闭）'
     while (!sameOut.includes('listening') && Date.now() < d3) await new Promise((r) => setTimeout(r, 50))
     await new Promise((r) => setTimeout(r, 1500))
     check('已是最新版时不提示', !/有新版本/.test(sameOut))
+
+    // upgrade --check：只查不装
+    const up = await runCmd(['upgrade', '--check'], { ...updateEnv, OHMY_REGISTRY: regUrl })
+    check('upgrade --check 能查新版', /有新版本可用：.*→ 99\.0\.0/.test(up.stdout), up.stdout.trim() || up.stderr.trim())
+    check('upgrade --check 给出升级命令', /upgrade/.test(up.stdout))
     same.kill('SIGTERM')
     older.close()
   } finally {
