@@ -246,8 +246,8 @@ CI (`.github/workflows/ci.yml`) runs tests + smoke on Node 20 / 22 / 24.
 Pushing a `v*` tag publishes automatically (GitHub Actions + npm Trusted Publishing, no token, with provenance):
 
 ```bash
-npm version minor -m "v%s"   # bumps both version files and creates the tag
-git push --follow-tags
+npm run release -- minor            # tests → bump → CHANGELOG → tag → push, in one go
+npm run release -- patch --dry-run  # show the plan without changing anything
 ```
 
 See [RELEASING.md](RELEASING.md) for the one-time setup.

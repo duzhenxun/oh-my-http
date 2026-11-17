@@ -243,8 +243,8 @@ CI（`.github/workflows/ci.yml`）在 Node 20 / 22 / 24 上跑测试 + 冒烟。
 打 `v*` tag 就自动发布（GitHub Actions + npm Trusted Publishing，无需 token，带 provenance）：
 
 ```bash
-npm version minor -m "v%s"   # 改版本号并打 tag（会同步 lib/version.js）
-git push --follow-tags
+npm run release -- minor     # 一条命令：跑测试 → 改版本 → 改 CHANGELOG → 打 tag → 推送
+npm run release -- patch --dry-run   # 只看计划，不改任何东西
 ```
 
 细节见 [RELEASING.md](RELEASING.md)。

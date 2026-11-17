@@ -2,6 +2,14 @@
 
 ## 未发布
 
+### 一条命令发版
+
+- 新增 `npm run release -- <patch|minor|major|x.y.z>`（`scripts/release.mjs`）：
+  检查分支/工作区/远端同步/tag 唯一 → 跑测试 → 把 CHANGELOG 的「未发布」改成新版本号 →
+  `npm version`（同步 `lib/version.js` 并打 tag）→ `git push --follow-tags` 触发自动发布。
+- 支持 `--dry-run`（只检查）、`--skip-tests`、`--no-push`、`--allow-dirty`。
+- 新增 `test/release-script.test.js`：dry-run 不改动、正式流程升版本+改日志+打 tag、脏工作区/非 main/tag 重复都会拦住。
+
 ### 批量停止与自动升级
 
 - `stop` / `restart` / `reload` 支持 `--all`：一次处理状态目录里的所有实例（`oh-my-http stop --all`）。

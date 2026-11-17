@@ -22,14 +22,23 @@
 
 ## 发版流程
 
+一条命令（推荐）：
+
+```bash
+npm run release -- minor          # 0.4.0 → 0.5.0；patch / major / 1.2.3 都行
+npm run release -- patch --dry-run   # 只检查，什么都不改
+```
+
+`scripts/release.mjs` 会依次：检查在 `main`、工作区干净、没落后 origin、tag 不重复 →
+跑 `npm test` → 把 CHANGELOG 的「未发布」改成新版本号 → `npm version`（同步 `lib/version.js`、打 tag）
+→ `git push --follow-tags` 触发发布。可用 `--skip-tests` / `--no-push` / `--allow-dirty` 跳过对应步骤。
+
+手动两步（等价）：
+
 ```bash
 git checkout main && git pull
-
-# 1. 改版本号：会自动 commit + 打 tag（patch / minor / major 按需）
-npm version minor -m "v%s"
-
-# 2. 把提交和 tag 一起推上去 → 触发 publish 工作流
-git push --follow-tags
+npm version minor -m "v%s"        # 改版本号 + 打 tag
+git push --follow-tags            # 触发 publish 工作流
 ```
 
 发版前把 `CHANGELOG.md` 里的 `## 未发布` 改成版本号（不改也能发，Release 说明会自动退回那一节）。
