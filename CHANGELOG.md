@@ -1,7 +1,6 @@
 # 更新日志
 
-## 未发布
-
+## 0.5.0
 ### 一条命令发版
 
 - 新增 `npm run release -- <patch|minor|major|x.y.z>`（`scripts/release.mjs`）：
