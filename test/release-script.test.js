@@ -39,6 +39,9 @@ async function makeRepo(t) {
 
   const git = (...argv) => execFileSync('git', argv, { cwd: dir, encoding: 'utf8' }).trim()
   git('init', '-q')
+  // CI 里 git 的默认分支可能是 master，这里显式切成 main（发版脚本只认 main）
+  const branch = git('symbolic-ref', '--short', 'HEAD')
+  if (branch !== 'main') git('branch', '-m', branch, 'main')
   git('config', 'user.email', 'test@example.com')
   git('config', 'user.name', 'test')
   git('add', '-A')
